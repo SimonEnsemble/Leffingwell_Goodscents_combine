@@ -1,1 +1,3 @@
-# Leffingwell_Goodscents_combine
+# combine the Leffingwell and Goodscents (molecule, odor) data set
+
+

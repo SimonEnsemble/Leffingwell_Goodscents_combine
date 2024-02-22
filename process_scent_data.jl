@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.38
+# v0.19.39
 
 using Markdown
 using InteractiveUtils
@@ -7,7 +7,7 @@ using InteractiveUtils
 # ╔═╡ 99004b2e-36f7-11ed-28ae-f3f75c823964
 begin
 	import Pkg; Pkg.activate("."; io=devnull)
-	using CSV, DataFrames, LinearAlgebra, MolecularGraph
+	using CSV, DataFrames, JSON
 	using CairoMakie, Colors, PlutoTest, PlutoUI
 	TableOfContents(; title="Odor Data Processing", depth=3)
 end
@@ -267,15 +267,6 @@ md"""
 Join the three tables so as to link together (i) the molecule described by its SMILES string with (ii) its odor perception labels.  Rename `"IsomericSMILES"` to `"molecule"`, rename `"Descriptors"` to `"odor"`, and drop all columns except `"molecule"` and `"odor"`.  Finally, drop all rows with `missing` data, and group by molecule to find duplicate SMILES.
 """
 
-# ╔═╡ 8aee658c-cd64-4e43-b623-642ab0e66467
-"""
-transform a column of raw odor data by:
- - splitting on ';'
-"""
-function transform_goodscents(col)
-	return [String.(x) for x in split.(col, ";")]
-end
-
 # ╔═╡ 600197f1-a9d5-478b-8fa0-6deac3d25b57
 goodscents_gdf = let
 	# join tables on Stimulus
@@ -291,7 +282,7 @@ goodscents_gdf = let
 	# extract the labels from the raw strings
 	transform!(
 		df, 
-		"goodscents_odor" => transform_goodscents; 
+		"goodscents_odor" => col -> [String.(x) for x in split.(col, ";")]; 
 		renamecols=false
 	)
 	# group by SMILES
@@ -649,9 +640,9 @@ md"""
 """
 
 # ╔═╡ 9deb1a41-1248-47da-aacb-c129863f8db7
-md"""
-Every molecule now has at least one label...
 """
+Every molecule now has at least $(length.(label_freq_corrected2.odor) |> minimum) label...
+""" |> Markdown.parse
 
 # ╔═╡ 20380a67-3b2d-4063-a491-5bfe68706ee8
 length.(label_freq_corrected2.odor) |> minimum
@@ -666,19 +657,78 @@ length(reduce(union, label_freq_corrected2.odor))
 
 # ╔═╡ 29ea157b-a324-49a0-8412-03d03be9b6e7
 md"""
-This is our final dataframe!
+## Bitvector Encoding
 """
 
+# ╔═╡ 2462e47a-4f17-4723-87f8-324a2a570706
+md"""
+We need these data in bit-encoded format.
+"""
+
+# ╔═╡ 1a0c8ab5-6181-48a0-8a91-02a9bd2c75a4
+label_to_idx = let
+	label_vec = reduce(union, label_freq_corrected2.odor) 
+	Dict(label_vec .=> eachindex(label_vec))
+end
+
+# ╔═╡ fe2a4aab-85ce-4c2b-b042-3bdf5bf8fba2
+idx_to_label = Dict(v => k for (k, v) in label_to_idx)
+
+# ╔═╡ fda94ce1-4069-4320-804a-d1f83d9f1073
+function list_to_vec(list)
+	vector = zeros(Int, length(label_to_idx))
+	for label in list
+		vector[label_to_idx[label]] = 1
+	end
+	return vector
+end
+
 # ╔═╡ 8584efe5-be9e-42ba-973d-4634bf6ec1bb
-data = label_freq_corrected2
+data = let
+	df = label_freq_corrected2
+	data = transform(
+		df,
+		:odor => col -> [list_to_vec(row) for row in col];
+		renamecols=false
+	)
+	mat = reduce(hcat, data.odor)' |> Matrix
+	cols = [Symbol("x$i") => copy(col) for (i, col) in enumerate(eachcol(mat))]
+	DataFrame(:molecule => df.molecule, cols...)
+end
 
 # ╔═╡ 7c889e04-bbee-490b-8cf8-fcc88fca3712
 md"""
 # Write to File
 """
 
+# ╔═╡ 38810e1d-94d9-4a18-8346-919cc1dba734
+md"""
+## CSV
+"""
+
+# ╔═╡ 9302a9af-ce89-4d2a-a46b-573e3b4257a9
+md"""
+Structures and odor label bitvectors
+"""
+
 # ╔═╡ 961f8c2c-cf31-47cc-ba96-14ded08c7507
 CSV.write("pyrfume.csv", data);
+
+# ╔═╡ 4f4c5f24-ed9c-4576-8804-c11b320885f4
+md"""
+## JSON
+"""
+
+# ╔═╡ 7204fe2c-ae72-4a7f-8d89-692bba18517d
+md"""
+Odor label encoding/decoding key
+"""
+
+# ╔═╡ 35c4865e-24a2-4196-90e1-5c6c6a770a04
+open("odor_key.json"; write=true) do f
+	json = JSON.json(merge(idx_to_label, label_to_idx))
+	write(f, json)
+end;
 
 # ╔═╡ 667f1ff5-d22c-4b8c-b5a4-1148f6741202
 md"""
@@ -702,7 +752,7 @@ List the number of unique olfactory perception labels on each molecule in the da
 
 # ╔═╡ a11f06bb-9fcc-431d-9967-f8d26aa44bf2
 analyzed_data = transform(
-	data, 
+	label_freq_corrected2, 
 	"odor" => (col -> map(row -> length(row), col)) => "# odor labels"
 )
 
@@ -744,7 +794,7 @@ md"""
 # ╔═╡ 25a5c232-a0f6-4a1b-8f91-3cee5d97b3db
 begin
 	expanded_data = DataFrame(molecule=String[], odor=String[])
-	for row in eachrow(data)
+	for row in eachrow(label_freq_corrected2)
 		for odor in row["odor"]
 			push!(expanded_data, [row["molecule"], odor])
 		end
@@ -819,7 +869,6 @@ end
 # ╠═bd1bdb6a-51e8-43f3-85d5-cbf757686cc8
 # ╟─1542471a-0877-4a18-9f48-6f4d96b12e2a
 # ╟─25b4bda4-f2f6-436f-90ec-01c0594118b5
-# ╠═8aee658c-cd64-4e43-b623-642ab0e66467
 # ╠═600197f1-a9d5-478b-8fa0-6deac3d25b57
 # ╟─2e9eb9ec-7d3c-4042-8d52-1dbc306c7330
 # ╠═0f90911c-d106-4e6a-8260-4022085ff5b7
@@ -887,9 +936,18 @@ end
 # ╟─3f8057f7-3391-4361-9ec5-7f739c66649c
 # ╠═5c7647f0-ed46-4d14-90d7-c95584d45cc4
 # ╟─29ea157b-a324-49a0-8412-03d03be9b6e7
+# ╟─2462e47a-4f17-4723-87f8-324a2a570706
+# ╠═1a0c8ab5-6181-48a0-8a91-02a9bd2c75a4
+# ╠═fe2a4aab-85ce-4c2b-b042-3bdf5bf8fba2
+# ╠═fda94ce1-4069-4320-804a-d1f83d9f1073
 # ╠═8584efe5-be9e-42ba-973d-4634bf6ec1bb
 # ╟─7c889e04-bbee-490b-8cf8-fcc88fca3712
+# ╟─38810e1d-94d9-4a18-8346-919cc1dba734
+# ╟─9302a9af-ce89-4d2a-a46b-573e3b4257a9
 # ╠═961f8c2c-cf31-47cc-ba96-14ded08c7507
+# ╟─4f4c5f24-ed9c-4576-8804-c11b320885f4
+# ╟─7204fe2c-ae72-4a7f-8d89-692bba18517d
+# ╠═35c4865e-24a2-4196-90e1-5c6c6a770a04
 # ╟─667f1ff5-d22c-4b8c-b5a4-1148f6741202
 # ╟─905dc26a-fc2c-47a0-8569-a4b7a4541cfa
 # ╟─b520bcf8-1aee-4a17-8e34-4ce97206bd7c

@@ -480,51 +480,6 @@ cheesy_corrected = transform(
 	renamecols=false
 )
 
-# ╔═╡ b919dd0d-9bc4-46eb-bea2-d6e37da5aaef
-md"""
-### Noun/Adjective Pairs
-"""
-
-# ╔═╡ 0628a48a-e56c-404f-bcb9-c4ee77cd4423
-md"""
-Some labels are present both in noun and adjective form, e.g. "fish" and "fishy"
-"""
-
-# ╔═╡ 90e6c8b0-5535-4621-aab9-12ba450585e3
-cheesy_corrected_labels = reduce(union, cheesy_corrected.odor);
-
-# ╔═╡ 6c3fa2d5-5da1-4b8e-ad94-d47255141209
-cheesy_corrected_labels[findall(startswith("fish"), cheesy_corrected_labels)]
-
-# ╔═╡ ddd438af-9bed-489e-97b6-0e2545e05fc1
-md"""
-These should all be coerced to adjective form:
-"""
-
-# ╔═╡ 5809737f-edac-46e3-a5a8-941c8520efe2
-function is_nouny(str)
-	for x in cheesy_corrected_labels
-		if str == "$(x)y"
-			return true
-		end
-	end
-	return false
-end
-
-# ╔═╡ 8050b56a-5fd5-4cd4-b69f-b20c717270ae
-nouny_idx = is_nouny.(cheesy_corrected_labels) |> findall
-
-# ╔═╡ fa4b6f62-a849-4372-941d-1a140e467082
-nouny_pairs = [x[1:end-1] for x in cheesy_corrected_labels[nouny_idx]] .=> 
-	cheesy_corrected_labels[nouny_idx]
-
-# ╔═╡ e94a4f61-a01a-40e1-ae24-192a8cb41716
-nouny_corrected = transform(
-	cheesy_corrected,
-	:odor => col -> [replace(row, nouny_pairs...) for row in col];
-	renamecols=false
-)
-
 # ╔═╡ e2326792-be54-4a14-ab8d-04019010c372
 md"""
 ### Multi-Word Labels
@@ -553,7 +508,7 @@ end
 
 # ╔═╡ ddfe3e46-a152-4db1-93c2-b1ce7a864b59
 peel_corrected = transform(
-	nouny_corrected,
+	cheesy_corrected,
 	:odor => col -> [peel_or_skin.(row) for row in col];
 	renamecols=false
 )
@@ -585,9 +540,59 @@ currant_corrected = transform(
 	renamecols=false
 )
 
+# ╔═╡ b919dd0d-9bc4-46eb-bea2-d6e37da5aaef
+md"""
+### Noun/Adjective Pairs
+"""
+
+# ╔═╡ 0628a48a-e56c-404f-bcb9-c4ee77cd4423
+md"""
+Some labels are present both in noun and adjective form, e.g. "fish" and "fishy"
+"""
+
+# ╔═╡ 90e6c8b0-5535-4621-aab9-12ba450585e3
+currant_corrected_labels = reduce(union, currant_corrected.odor);
+
+# ╔═╡ 6c3fa2d5-5da1-4b8e-ad94-d47255141209
+currant_corrected_labels[findall(startswith("fish"), currant_corrected_labels)]
+
+# ╔═╡ ddd438af-9bed-489e-97b6-0e2545e05fc1
+md"""
+These should all be coerced to adjective form:
+"""
+
+# ╔═╡ 5809737f-edac-46e3-a5a8-941c8520efe2
+function is_nouny(str)
+	for x in currant_corrected_labels
+		if str == "$(x)y"
+			return true
+		end
+	end
+	return false
+end
+
+# ╔═╡ 8050b56a-5fd5-4cd4-b69f-b20c717270ae
+nouny_idx = is_nouny.(currant_corrected_labels) |> findall
+
+# ╔═╡ fa4b6f62-a849-4372-941d-1a140e467082
+nouny_pairs = [x[1:end-1] for x in currant_corrected_labels[nouny_idx]] .=> 
+	currant_corrected_labels[nouny_idx]
+
+# ╔═╡ e94a4f61-a01a-40e1-ae24-192a8cb41716
+nouny_corrected = transform(
+	currant_corrected,
+	:odor => col -> [replace(row, nouny_pairs...) for row in col] .|> unique;
+	renamecols=false
+)
+
 # ╔═╡ 171258ed-f732-44c2-8d8d-4a386ac8f5f2
 md"""
-## Final Data
+## Final Processing
+"""
+
+# ╔═╡ f149b713-6e4c-462b-8cc3-ebc2d433d1f8
+md"""
+### Label Frequency
 """
 
 # ╔═╡ 2020a24e-8dbe-4f2a-9aa3-5999391e7d9d
@@ -597,40 +602,112 @@ In fact, all labels with fewer than 30 positive instances are excluded.
 """
 
 # ╔═╡ 1ee63411-94a2-4535-a6bf-1ce62e23a6db
-examples_per_label = [
+examples_per_anomalous_label = [
 	anomaly => count(isequal(anomaly), reduce(vcat, currant_corrected.odor)) 
 	for anomaly in filter(
 		x -> occursin(" ", x), reduce(union, currant_corrected.odor)
 	)
 ]
 
+# ╔═╡ 24affb80-1e23-4d94-a0fa-e9ad9af5666e
+all_labels = reduce(vcat, currant_corrected.odor) |> unique;
+
+# ╔═╡ 600de752-8927-493f-b58e-605773bb6c4c
+counts_per_label = Dict(
+	label => count(
+		isequal(label), reduce(vcat, currant_corrected.odor)
+	) for label in all_labels
+)
+
+# ╔═╡ d0ef14c9-391c-4af8-b915-d86c8aefd002
+function is_over_threshold(label)
+	return counts_per_label[label] ≥ 30
+end
+
 # ╔═╡ 47cb7741-01da-4bd4-8c05-c818e6c87f6b
-data
+label_freq_corrected = transform(
+	nouny_corrected,
+	:odor => col -> [filter(≠(""), [is_over_threshold(x) ? x : "" for x in row]) for row in col];
+	renamecols=false
+)
+
+# ╔═╡ 514c4b55-f246-475d-b5bc-67349854e0b4
+md"""
+This yields molecules with no labels left.
+These must be removed.
+"""
+
+# ╔═╡ 83d1567c-b101-4f59-a658-1ff20e8d8b0f
+length.(label_freq_corrected.odor) |> minimum
+
+# ╔═╡ 394a567a-8e4e-4c6e-8f22-69e31daca417
+label_freq_corrected2 = filter(row -> length(row.odor) > 0, label_freq_corrected)
+
+# ╔═╡ 39a1c22a-4011-4b15-9604-fd8ebcfc3357
+md"""
+### Success!
+"""
+
+# ╔═╡ 9deb1a41-1248-47da-aacb-c129863f8db7
+md"""
+Every molecule now has at least one label...
+"""
+
+# ╔═╡ 20380a67-3b2d-4063-a491-5bfe68706ee8
+length.(label_freq_corrected2.odor) |> minimum
+
+# ╔═╡ 3f8057f7-3391-4361-9ec5-7f739c66649c
+md"""
+...and there are $(length(reduce(union, label_freq_corrected2.odor))) labels that are sufficiently frequent.
+"""
+
+# ╔═╡ 5c7647f0-ed46-4d14-90d7-c95584d45cc4
+length(reduce(union, label_freq_corrected2.odor))
+
+# ╔═╡ 29ea157b-a324-49a0-8412-03d03be9b6e7
+md"""
+This is our final dataframe!
+"""
+
+# ╔═╡ 8584efe5-be9e-42ba-973d-4634bf6ec1bb
+data = label_freq_corrected2
 
 # ╔═╡ 7c889e04-bbee-490b-8cf8-fcc88fca3712
-md"# write to file"
+md"""
+# Write to File
+"""
 
 # ╔═╡ 961f8c2c-cf31-47cc-ba96-14ded08c7507
 CSV.write("pyrfume.csv", data);
 
+# ╔═╡ 667f1ff5-d22c-4b8c-b5a4-1148f6741202
+md"""
+# Analysis
+"""
+
 # ╔═╡ 905dc26a-fc2c-47a0-8569-a4b7a4541cfa
-md"## analysis of the joined data
-the goal here is to conduct a similar analysis of the olfactory data as in Fig. 3 [here](https://arxiv.org/pdf/1910.10685.pdf).
-"
+md"""
+Goal: conduct a similar analysis of the olfactory data as in Fig. 3 [here](https://arxiv.org/pdf/1910.10685.pdf).
+"""
 
-# ╔═╡ 2a2910af-dcf2-4aa7-bfc3-32950d73cc9e
-md"👃 like in Fig. 3a [here](https://arxiv.org/pdf/1910.10685.pdf) (yours will be a bit different), create a bar plot visualizing the number of molecules with a given number of olfactory labels on it. use your data frame `odor_label_counts` for this."
+# ╔═╡ b520bcf8-1aee-4a17-8e34-4ce97206bd7c
+md"""
+### Odor Labels per Molecule
+"""
 
-# ╔═╡ 9208b96f-963f-4fca-9a2e-3803160f11b1
-md"
-### odor labels per molecule
-👃 append a new column to `data`, `\"# odor labels\"`, that lists the number of unique olfactory perception labels on each molecule in the data."
+# ╔═╡ 28e4e0c5-858d-4d7c-b7d2-3771ab7affb1
+md"""
+List the number of unique olfactory perception labels on each molecule in the data.
+"""
 
 # ╔═╡ a11f06bb-9fcc-431d-9967-f8d26aa44bf2
-# transform!(data, "odor" => (col -> map(row -> length(row), col)) => "# odor labels")
+analyzed_data = transform(
+	data, 
+	"odor" => (col -> map(row -> length(row), col)) => "# odor labels"
+)
 
 # ╔═╡ b562ad25-45e5-4fc9-8d74-27b9727e4766
-md"👃 create a data frame `odor_label_counts` that lists the # of molecules with a given number of odor labels.
+md"List the number of molecules with a given number of odor labels.
 
 | # odor labels | # molecules |
 | ---- | ---- |
@@ -641,11 +718,13 @@ md"👃 create a data frame `odor_label_counts` that lists the # of molecules wi
 "
 
 # ╔═╡ 0233d3e0-c934-48c2-be82-8e041227aec5
-odor_label_counts = combine(groupby(data, "# odor labels"), nrow => "# molecules")
+odor_label_counts = combine(
+	groupby(analyzed_data, "# odor labels"), nrow => "# molecules"
+)
 
 # ╔═╡ ec3b2463-4284-41bb-9c60-63ba8a7b6705
 begin
-	fig2 = Figure(resolution=(660, 400))
+	fig2 = Figure(; size=(660, 400))
 	ax2  = Axis(fig2[1, 1],
 		xlabel="# odor labels on a molecule",
 		ylabel="# molecules",
@@ -657,53 +736,10 @@ begin
 	fig2
 end
 
-# ╔═╡ 53f58ff1-1f99-4205-9346-bf2f8ad4e74d
-md"
-### molecules that smell a certain way
-👃 how many molecules in the data include a label \"eucalyptus\"?"
-
-# ╔═╡ b1a04dc4-b281-413d-8cc0-3f704d1e6e3b
-nrow(filter(row -> "eucalyptus" in row["odor"], data))
-
-# ╔═╡ 82b4049e-5c34-43a4-85e4-fd95c1693989
-md"👃 draw the molecular structure of the molecules that are labeled \"mint\" _and_ \"eucalyptus\".
-
-!!! hint
-	use `smilestomol` [here](https://mojaie.github.io/MolecularGraph.jl_notebook/molecular_graph_basics.jl.html).
-"
-
-# ╔═╡ 9e69ba26-4f61-4b54-94d8-986ed3d5a704
-mint_and_eucalyptus = filter(
-	row -> "mint" in row["odor"] && "eucalyptus" in row["odor"], 
-	data
-)
-
-# ╔═╡ c8c928e8-f16c-4c6c-a807-5d64183e6d4d
-smilestomol(mint_and_eucalyptus[1, "molecule"])
-
-# ╔═╡ 832897f7-88fb-4389-b051-51adfec3db01
-smilestomol(mint_and_eucalyptus[2, "molecule"])
-
-# ╔═╡ 64bfc9fb-5866-426d-93ce-90521bf93356
-smilestomol(mint_and_eucalyptus[3, "molecule"])
-
-# ╔═╡ 47478ef0-a512-47d4-a171-74e073cab810
-md"
-### molecules per odor label
-👃 we now wish to visualize the prevalence of each odor descriptor. create a bar plot that shows, for each unique odor label, how many molecules have that odor (according to the experts in the studies). 
-* sort the bars according to odor prevalance
-* make the bars go from left to right
-* include the odor name on the y-axis
-* include x- and y-axis labels (x-axis = # molecules, y-axis = odor)
-
-in my view, this is a better way to present the (actually, MORE) information (than) in Fig. 3b [here](https://arxiv.org/pdf/1910.10685.pdf).
-
-!!! warning
-	this is very challenging. 
-
-!!! hint
-	to actually read the many odor labels, use `Figure(resolution=(500, 10000))` to make a long figure that you can scroll through.
-"
+# ╔═╡ 104cf55d-538c-4b5c-a6eb-47c91f20aa6f
+md"""
+### Label Prevalence
+"""
 
 # ╔═╡ 25a5c232-a0f6-4a1b-8f91-3cee5d97b3db
 begin
@@ -716,18 +752,16 @@ begin
 	expanded_data
 end
 
-# ╔═╡ 75e8312d-1614-4626-99d1-3e07fdec8bab
-unique(expanded_data[:, "odor"])
-
 # ╔═╡ 3d1f7cfa-ae9b-4ed1-9261-595fee65a974
-odors = combine(groupby(expanded_data, "odor"), nrow => "# molecules")
-
-# ╔═╡ fa50cac7-64f9-4439-9645-c6c0b4fa0b99
-sort!(odors, "# molecules", rev=true)
+odors = sort!(
+	combine(groupby(expanded_data, "odor"), nrow => "# molecules"), 
+	"# molecules";
+	rev=true
+)
 
 # ╔═╡ 28ec1019-f51e-4dd9-a5ca-cfd0a095fcea
 begin
-	fig = Figure(resolution=(500, 10000))
+	fig = Figure(; resolution=(500, 10000))
 	ax  = Axis(fig[1, 1], 
 		xlabel="# molecules", 
 		ylabel="odor", 
@@ -739,60 +773,6 @@ begin
 	ylims!(0.0, nrow(odors)+0.5)
 	fig
 end
-
-# ╔═╡ 2045e894-396b-44d3-8dd8-ff0b88c598c2
-md"
-### molecules with certain chemistry
-👃 how many of the odorants have a carbonyl group in their structure? this is expressed as the SMARTS pattern \"[CX3]=[OX1]\".
-
-!!! hint
-	see `has_substruct_match` [here](https://mojaie.github.io/MolecularGraph.jl_notebook/substructure_and_query.jl.html).
-"
-
-# ╔═╡ 86683b41-7b2a-471f-b817-bc0925c3770f
-function has_carbonyl(smiles::String)
-	mol = smilestomol(smiles)
-	has_substruct_match(
-			mol, smartstomol(raw"[CX3]=[OX1]"))
-end
-
-# ╔═╡ 493328f4-fcfd-49d4-84f7-6540ea6d2319
-has_carbonyl(data[2, "molecule"])
-
-# ╔═╡ 72101250-16ae-4c20-a7aa-e1479a41860f
-nrow(
-	filter(row -> has_carbonyl(row["molecule"]), data)
-)
-
-# ╔═╡ 58b6234b-a10e-46de-8031-ab65028d3c89
-md"
-### co-occurances of labels
-the paper notes
-> there is an extremely strong co-occurrence structure among odor descriptors that reflects a common-sense intuition of which odor descriptors are similar and dissimilar.
-
-👃 (a strong co-occurance) among all molecules with \"apple\" as an olfactory label, what fraction of these also have the label `\"fruity\"?
-"
-
-# ╔═╡ 8bd8627b-9884-4efd-acf9-e1e57a52c833
-n_apple = nrow(filter(row -> "apple" in row["odor"], data))
-
-# ╔═╡ 06eabbc3-94af-4b76-9369-9e5df468cbbc
-n_apple_and_fruity = nrow(filter(row -> ("apple" in row["odor"]) && ("fruity" in row["odor"]), data))
-
-# ╔═╡ 494521db-50e9-48ee-913e-1ac3c70d3172
-n_apple_and_fruity / n_apple
-
-# ╔═╡ 380f9d36-fb68-490a-9021-16c265056a3e
-md"👃 (a weak co-occurance) among all molecules with the label \"cabbage\", what fraction also have the label \"musk\"?"
-
-# ╔═╡ c63f9137-574d-4c70-91ce-99fdc304bf02
-n_cabbage = nrow(filter(row -> "cabbage" in row["odor"], data))
-
-# ╔═╡ 1b3230db-bdda-4c71-9b33-31c779d50a7b
-n_cabbage_and_musk = nrow(filter(row -> ("cabbage" in row["odor"]) && ("musk" in row["odor"]), data))
-
-# ╔═╡ 7242a8c3-362c-4df9-b518-1a2a40ca2f39
-n_cabbage_and_musk / n_cabbage
 
 # ╔═╡ Cell order:
 # ╠═99004b2e-36f7-11ed-28ae-f3f75c823964
@@ -876,6 +856,11 @@ n_cabbage_and_musk / n_cabbage
 # ╠═4ff07081-dd7e-4646-9bcb-9f15b0c75d89
 # ╠═47a135c0-fe63-4a13-a567-f3cd428ab73e
 # ╠═ddfe3e46-a152-4db1-93c2-b1ce7a864b59
+# ╟─64176145-8bb6-4403-890c-a7a981e710fb
+# ╟─e49adaa0-c250-4610-a2f1-baad018867df
+# ╠═36627341-e5e9-44e7-973c-2c5db8dd6391
+# ╟─740e23a3-d701-417d-a3b9-659f6a072a0b
+# ╠═09996b05-3094-4b51-8b54-e0856f36786a
 # ╟─b919dd0d-9bc4-46eb-bea2-d6e37da5aaef
 # ╟─0628a48a-e56c-404f-bcb9-c4ee77cd4423
 # ╠═90e6c8b0-5535-4621-aab9-12ba450585e3
@@ -885,46 +870,35 @@ n_cabbage_and_musk / n_cabbage
 # ╠═8050b56a-5fd5-4cd4-b69f-b20c717270ae
 # ╠═fa4b6f62-a849-4372-941d-1a140e467082
 # ╠═e94a4f61-a01a-40e1-ae24-192a8cb41716
-# ╟─64176145-8bb6-4403-890c-a7a981e710fb
-# ╟─e49adaa0-c250-4610-a2f1-baad018867df
-# ╠═36627341-e5e9-44e7-973c-2c5db8dd6391
-# ╟─740e23a3-d701-417d-a3b9-659f6a072a0b
-# ╠═09996b05-3094-4b51-8b54-e0856f36786a
 # ╟─171258ed-f732-44c2-8d8d-4a386ac8f5f2
+# ╟─f149b713-6e4c-462b-8cc3-ebc2d433d1f8
 # ╟─2020a24e-8dbe-4f2a-9aa3-5999391e7d9d
 # ╠═1ee63411-94a2-4535-a6bf-1ce62e23a6db
+# ╠═24affb80-1e23-4d94-a0fa-e9ad9af5666e
+# ╠═600de752-8927-493f-b58e-605773bb6c4c
+# ╠═d0ef14c9-391c-4af8-b915-d86c8aefd002
 # ╠═47cb7741-01da-4bd4-8c05-c818e6c87f6b
-# ╠═7c889e04-bbee-490b-8cf8-fcc88fca3712
+# ╟─514c4b55-f246-475d-b5bc-67349854e0b4
+# ╠═83d1567c-b101-4f59-a658-1ff20e8d8b0f
+# ╠═394a567a-8e4e-4c6e-8f22-69e31daca417
+# ╟─39a1c22a-4011-4b15-9604-fd8ebcfc3357
+# ╟─9deb1a41-1248-47da-aacb-c129863f8db7
+# ╠═20380a67-3b2d-4063-a491-5bfe68706ee8
+# ╟─3f8057f7-3391-4361-9ec5-7f739c66649c
+# ╠═5c7647f0-ed46-4d14-90d7-c95584d45cc4
+# ╟─29ea157b-a324-49a0-8412-03d03be9b6e7
+# ╠═8584efe5-be9e-42ba-973d-4634bf6ec1bb
+# ╟─7c889e04-bbee-490b-8cf8-fcc88fca3712
 # ╠═961f8c2c-cf31-47cc-ba96-14ded08c7507
+# ╟─667f1ff5-d22c-4b8c-b5a4-1148f6741202
 # ╟─905dc26a-fc2c-47a0-8569-a4b7a4541cfa
-# ╟─2a2910af-dcf2-4aa7-bfc3-32950d73cc9e
-# ╟─9208b96f-963f-4fca-9a2e-3803160f11b1
+# ╟─b520bcf8-1aee-4a17-8e34-4ce97206bd7c
+# ╟─28e4e0c5-858d-4d7c-b7d2-3771ab7affb1
 # ╠═a11f06bb-9fcc-431d-9967-f8d26aa44bf2
 # ╟─b562ad25-45e5-4fc9-8d74-27b9727e4766
 # ╠═0233d3e0-c934-48c2-be82-8e041227aec5
 # ╠═ec3b2463-4284-41bb-9c60-63ba8a7b6705
-# ╟─53f58ff1-1f99-4205-9346-bf2f8ad4e74d
-# ╠═b1a04dc4-b281-413d-8cc0-3f704d1e6e3b
-# ╟─82b4049e-5c34-43a4-85e4-fd95c1693989
-# ╠═9e69ba26-4f61-4b54-94d8-986ed3d5a704
-# ╠═c8c928e8-f16c-4c6c-a807-5d64183e6d4d
-# ╠═832897f7-88fb-4389-b051-51adfec3db01
-# ╠═64bfc9fb-5866-426d-93ce-90521bf93356
-# ╟─47478ef0-a512-47d4-a171-74e073cab810
+# ╟─104cf55d-538c-4b5c-a6eb-47c91f20aa6f
 # ╠═25a5c232-a0f6-4a1b-8f91-3cee5d97b3db
-# ╠═75e8312d-1614-4626-99d1-3e07fdec8bab
 # ╠═3d1f7cfa-ae9b-4ed1-9261-595fee65a974
-# ╠═fa50cac7-64f9-4439-9645-c6c0b4fa0b99
 # ╠═28ec1019-f51e-4dd9-a5ca-cfd0a095fcea
-# ╟─2045e894-396b-44d3-8dd8-ff0b88c598c2
-# ╠═86683b41-7b2a-471f-b817-bc0925c3770f
-# ╠═493328f4-fcfd-49d4-84f7-6540ea6d2319
-# ╠═72101250-16ae-4c20-a7aa-e1479a41860f
-# ╟─58b6234b-a10e-46de-8031-ab65028d3c89
-# ╠═8bd8627b-9884-4efd-acf9-e1e57a52c833
-# ╠═06eabbc3-94af-4b76-9369-9e5df468cbbc
-# ╠═494521db-50e9-48ee-913e-1ac3c70d3172
-# ╟─380f9d36-fb68-490a-9021-16c265056a3e
-# ╠═c63f9137-574d-4c70-91ce-99fdc304bf02
-# ╠═1b3230db-bdda-4c71-9b33-31c779d50a7b
-# ╠═7242a8c3-362c-4df9-b518-1a2a40ca2f39

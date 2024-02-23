@@ -1,12 +1,12 @@
 ### A Pluto.jl notebook ###
-# v0.19.39
+# v0.19.38
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ 99004b2e-36f7-11ed-28ae-f3f75c823964
 begin
-	import Pkg; Pkg.activate("."; io=devnull)
+	import Pkg; Pkg.activate()#"."; io=devnull)
 	using CSV, DataFrames, JSON
 	using CairoMakie, Colors, PlutoTest, PlutoUI
 	TableOfContents(; title="Odor Data Processing", depth=3)
@@ -359,10 +359,10 @@ merged = let
 	df = outerjoin(goodscents, leffingwell; makeunique=true, on="molecule")
 	df = coalesce.(df, [[]])
 	transform!(
-	df, 
-	["goodscents_odor", "leffingwell_odor"] => 
-		((col1, col2) -> col1 .∪ col2) => 
-		"odor"
+		df, 
+		["goodscents_odor", "leffingwell_odor"] => 
+			((col1, col2) -> col1 .∪ col2) => 
+			"odor"
 	)
 	select!(df, [:molecule, :odor])
 end
@@ -410,6 +410,9 @@ odorless_corrected = transform(
 	renamecols=false
 )
 
+# ╔═╡ 6f1406ea-77d4-432f-af11-36497feb9da4
+@test ! any(length.(odorless_corrected[:, "odor"]) .== 0)
+
 # ╔═╡ f732f409-283a-46f3-bcc1-9b8913f37fda
 md"""
 ### "ABA" Labels
@@ -438,6 +441,9 @@ aba_corrected = transform(
 	];
 	renamecols=false
 )
+
+# ╔═╡ c86249b2-3245-4248-b120-0f16b17cb3e6
+@test length(filter(is_aba, reduce(union, aba_corrected.odor))) == 0
 
 # ╔═╡ 0a729562-155c-4911-9c30-40f79c41ecab
 md"""
@@ -470,6 +476,9 @@ cheesy_corrected = transform(
 	];
 	renamecols=false
 )
+
+# ╔═╡ c48151a0-f22e-4de5-aa62-7dcdfc86f8f2
+@test false # how do we know it worked/ the transform did as expected?
 
 # ╔═╡ e2326792-be54-4a14-ab8d-04019010c372
 md"""
@@ -889,17 +898,20 @@ end
 # ╠═8ac56799-5b28-4b86-ace3-0aef423af0d7
 # ╟─59ad90c7-a4a4-41e9-a28a-318f034a733b
 # ╠═e8b34946-8efc-4ee6-88f6-8eddbccffc4b
+# ╠═6f1406ea-77d4-432f-af11-36497feb9da4
 # ╟─f732f409-283a-46f3-bcc1-9b8913f37fda
 # ╟─057fff1b-e302-4dcb-9817-199cc2d0bca7
 # ╠═691057f2-0cbf-482b-8b4c-58601d8f7bcf
 # ╠═ae23e1fd-e5b6-4829-8fb6-32aa258719e1
 # ╠═06cbe47f-0e80-4c95-996a-1d817c34f036
+# ╠═c86249b2-3245-4248-b120-0f16b17cb3e6
 # ╟─0a729562-155c-4911-9c30-40f79c41ecab
 # ╟─18df3697-ce68-4697-a27b-1bb74952ec47
 # ╠═f709afff-cede-4af6-bcb9-1df480c3c7e0
 # ╠═106d5c5d-edbb-4978-86ed-763eb2acb9f5
 # ╠═30428033-9b5a-49c6-82da-2397b4d5af15
 # ╠═4bb4efa8-58ac-4bc6-9c01-6f7d1df9a511
+# ╠═c48151a0-f22e-4de5-aa62-7dcdfc86f8f2
 # ╟─e2326792-be54-4a14-ab8d-04019010c372
 # ╟─fd4f1370-5043-4fda-897e-9a62291cbcba
 # ╠═4ff07081-dd7e-4646-9bcb-9f15b0c75d89

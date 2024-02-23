@@ -4,4 +4,6 @@
 
 `"process_scent_data.html"` shows the result of running the code.
 
-`"pyrfume.csv"` contains the resultant data set.
+`"pyrfume.csv"` contains the resultant data set (structures and labels).
+
+`"odor_key.json"` contains a dictionary that converts bidirectionally between column number and odor label.

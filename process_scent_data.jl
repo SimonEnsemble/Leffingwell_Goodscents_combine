@@ -497,7 +497,7 @@ words_to_drop = [
 ];
 
 # ╔═╡ 47a135c0-fe63-4a13-a567-f3cd428ab73e
-function peel_or_skin(str)
+function two_words_second_meaningless(str)
 	for word in words_to_drop
 		if occursin(word, str)
 			return replace(str, word => "")
@@ -509,7 +509,7 @@ end
 # ╔═╡ ddfe3e46-a152-4db1-93c2-b1ce7a864b59
 peel_corrected = transform(
 	cheesy_corrected,
-	:odor => col -> [peel_or_skin.(row) for row in col];
+	:odor => col -> [two_words_second_meaningless.(row) for row in col];
 	renamecols=false
 )
 
@@ -518,10 +518,21 @@ md"""
 ### Currant
 """
 
-# ╔═╡ 36627341-e5e9-44e7-973c-2c5db8dd6391
-currant_forms = reduce(union, peel_corrected.odor)[
-	findall(x -> occursin("currant", x), reduce(union, peel_corrected.odor))
-]
+# ╔═╡ cdae7d36-abbc-4032-bcc1-c56856fd260b
+filter(row -> any([occursin("currant", o) for o in row["odor"]]), peel_corrected)
+
+# ╔═╡ 1c2842db-d4ac-4e38-94cb-7c9638455c91
+begin
+	currant_forms = String[]
+	for row in eachrow(peel_corrected)
+		for o in row["odor"]
+			if occursin("currant", o)
+				push!(currant_forms, o)
+			end
+		end
+	end
+	currant_forms 
+end
 
 # ╔═╡ e49adaa0-c250-4610-a2f1-baad018867df
 """
@@ -540,6 +551,13 @@ currant_corrected = transform(
 	renamecols=false
 )
 
+# ╔═╡ 3ef85ca1-a9c4-40d0-8c4c-f6feafb0a9f5
+filter(row -> any([occursin("currant", o) for o in row["odor"]]), currant_corrected)
+
+# ╔═╡ e0986408-b153-47f6-89e3-8d18b454744f
+@test false
+# why does "currant bud currant bud" occur still?
+
 # ╔═╡ b919dd0d-9bc4-46eb-bea2-d6e37da5aaef
 md"""
 ### Noun/Adjective Pairs
@@ -551,7 +569,7 @@ Some labels are present both in noun and adjective form, e.g. "fish" and "fishy"
 """
 
 # ╔═╡ 90e6c8b0-5535-4621-aab9-12ba450585e3
-currant_corrected_labels = reduce(union, currant_corrected.odor);
+currant_corrected_labels = reduce(union, currant_corrected.odor)
 
 # ╔═╡ 6c3fa2d5-5da1-4b8e-ad94-d47255141209
 currant_corrected_labels[findall(startswith("fish"), currant_corrected_labels)]
@@ -575,8 +593,7 @@ end
 nouny_idx = is_nouny.(currant_corrected_labels) |> findall
 
 # ╔═╡ fa4b6f62-a849-4372-941d-1a140e467082
-nouny_pairs = [x[1:end-1] for x in currant_corrected_labels[nouny_idx]] .=> 
-	currant_corrected_labels[nouny_idx]
+nouny_pairs = currant_corrected_labels[nouny_idx] .=> [x[1:end-1] for x in currant_corrected_labels[nouny_idx]]
 
 # ╔═╡ e94a4f61-a01a-40e1-ae24-192a8cb41716
 nouny_corrected = transform(
@@ -584,6 +601,15 @@ nouny_corrected = transform(
 	:odor => col -> [replace(row, nouny_pairs...) for row in col] .|> unique;
 	renamecols=false
 )
+
+# ╔═╡ 78d50455-fe0a-4dd0-ab69-234e6a917eb8
+begin
+	nouny_corrected_labels = reduce(union, nouny_corrected.odor)
+	@test "spicy" in nouny_corrected_labels
+	@test "cherry" in nouny_corrected_labels
+	@test ! ("fishy" in nouny_corrected_labels)
+	@test ! ("milky" in nouny_corrected_labels)
+end
 
 # ╔═╡ 171258ed-f732-44c2-8d8d-4a386ac8f5f2
 md"""
@@ -917,9 +943,12 @@ end
 # ╠═ddfe3e46-a152-4db1-93c2-b1ce7a864b59
 # ╟─64176145-8bb6-4403-890c-a7a981e710fb
 # ╟─e49adaa0-c250-4610-a2f1-baad018867df
-# ╠═36627341-e5e9-44e7-973c-2c5db8dd6391
+# ╠═cdae7d36-abbc-4032-bcc1-c56856fd260b
+# ╠═1c2842db-d4ac-4e38-94cb-7c9638455c91
 # ╟─740e23a3-d701-417d-a3b9-659f6a072a0b
 # ╠═09996b05-3094-4b51-8b54-e0856f36786a
+# ╠═3ef85ca1-a9c4-40d0-8c4c-f6feafb0a9f5
+# ╠═e0986408-b153-47f6-89e3-8d18b454744f
 # ╟─b919dd0d-9bc4-46eb-bea2-d6e37da5aaef
 # ╟─0628a48a-e56c-404f-bcb9-c4ee77cd4423
 # ╠═90e6c8b0-5535-4621-aab9-12ba450585e3
@@ -929,6 +958,7 @@ end
 # ╠═8050b56a-5fd5-4cd4-b69f-b20c717270ae
 # ╠═fa4b6f62-a849-4372-941d-1a140e467082
 # ╠═e94a4f61-a01a-40e1-ae24-192a8cb41716
+# ╠═78d50455-fe0a-4dd0-ab69-234e6a917eb8
 # ╟─171258ed-f732-44c2-8d8d-4a386ac8f5f2
 # ╟─f149b713-6e4c-462b-8cc3-ebc2d433d1f8
 # ╟─2020a24e-8dbe-4f2a-9aa3-5999391e7d9d

@@ -409,47 +409,6 @@ md"""
 ## Correct Anomalies
 """
 
-# ╔═╡ 768e4669-fcb7-4f40-b050-4944be5e476e
-md"""
-### `"odorless"` Contradictions
-"""
-
-# ╔═╡ 71fef714-cab0-4329-8179-119b064943bd
-odorless_idx = any.(isequal("odorless").(row) for row in merged.odor) |> findall
-
-# ╔═╡ 52f5e5aa-93cb-4024-b61d-b912ff235802
-"""
-$(length(odorless_idx)) molecules have the `"odorless"` label:
-""" |> Markdown.parse
-
-# ╔═╡ c171078f-645f-42bb-83bd-563c4f2c8b8e
-contradiction_idx = odorless_idx[length.(merged.odor[odorless_idx]) .> 1]
-
-# ╔═╡ ea610639-2314-44f9-a640-dd59e7bd4694
-"""
-$(length(contradiction_idx)) of those co-occur with other labels!
-""" |> Markdown.parse
-
-# ╔═╡ 8ac56799-5b28-4b86-ace3-0aef423af0d7
-merged[contradiction_idx, :]
-
-# ╔═╡ 59ad90c7-a4a4-41e9-a28a-318f034a733b
-md"""
-This is a foreseeable problem when using data collected from subjective human experiences!  
-For some people, a particular odor may be less perceptible.  
-For the sake of logical consistency, we remove the `"odorless"` label from cases where it co-occurs with a contradictory label.
-"""
-
-# ╔═╡ e8b34946-8efc-4ee6-88f6-8eddbccffc4b
-odorless_corrected = transform(
-	merged,
-	:odor => col -> [setdiff(row, ["odorless"]) for row in col];
-	renamecols=false
-)
-
-# ╔═╡ 6f1406ea-77d4-432f-af11-36497feb9da4
-@test ! any(length.(odorless_corrected[:, "odor"]) .== 0)
-
 # ╔═╡ f732f409-283a-46f3-bcc1-9b8913f37fda
 md"""
 ### "ABA" Labels
@@ -468,11 +427,11 @@ function is_aba(str)
 end
 
 # ╔═╡ ae23e1fd-e5b6-4829-8fb6-32aa258719e1
-aba_labels = filter(is_aba, reduce(union, odorless_corrected.odor))
+aba_labels = filter(is_aba, reduce(union, merged[:, "odor"]))
 
 # ╔═╡ 06cbe47f-0e80-4c95-996a-1d817c34f036
 aba_corrected = transform(
-	odorless_corrected,
+	merged,
 	:odor => col -> [
 		[is_aba(x) ? String.(split(x))[1] : x for x in row] for row in col
 	];
@@ -934,15 +893,6 @@ end
 # ╟─55a1ed69-003a-4702-8226-80cc050a0912
 # ╠═80c3eaa2-dfa2-4822-9dc6-002dd3fc23c9
 # ╟─ebd5497a-799b-4064-b8ac-0365147fb4f8
-# ╟─768e4669-fcb7-4f40-b050-4944be5e476e
-# ╟─52f5e5aa-93cb-4024-b61d-b912ff235802
-# ╠═71fef714-cab0-4329-8179-119b064943bd
-# ╟─ea610639-2314-44f9-a640-dd59e7bd4694
-# ╠═c171078f-645f-42bb-83bd-563c4f2c8b8e
-# ╠═8ac56799-5b28-4b86-ace3-0aef423af0d7
-# ╟─59ad90c7-a4a4-41e9-a28a-318f034a733b
-# ╠═e8b34946-8efc-4ee6-88f6-8eddbccffc4b
-# ╠═6f1406ea-77d4-432f-af11-36497feb9da4
 # ╟─f732f409-283a-46f3-bcc1-9b8913f37fda
 # ╟─057fff1b-e302-4dcb-9817-199cc2d0bca7
 # ╠═691057f2-0cbf-482b-8b4c-58601d8f7bcf

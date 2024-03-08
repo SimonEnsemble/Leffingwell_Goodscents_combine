@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.38
+# v0.19.40
 
 using Markdown
 using InteractiveUtils
@@ -62,7 +62,7 @@ Pre-process, combine, and summarize the odorant perception data of _Goodscents_ 
 
 # ╔═╡ adedc0fc-5651-47c1-a687-bc6952cdd894
 md"""
-We combine these data following the procedure described in:
+We combine these data mimicking the procedure described in:
 
 !!! citation ""	
 	[\"Machine Learning for Scent: Learning Generalizable Perceptual Representations of Small Molecules\"](https://arxiv.org/abs/1910.10685).
@@ -267,27 +267,28 @@ md"""
 Join the three tables so as to link together (i) the molecule described by its SMILES string with (ii) its odor perception labels.  Rename `"IsomericSMILES"` to `"molecule"`, rename `"Descriptors"` to `"odor"`, and drop all columns except `"molecule"` and `"odor"`.  Finally, drop all rows with `missing` data, and group by molecule to find duplicate SMILES.
 """
 
-# ╔═╡ 600197f1-a9d5-478b-8fa0-6deac3d25b57
-goodscents_gdf = let
+# ╔═╡ dfd599fa-7991-48cc-b7e0-a0bb0bf9fe11
+begin
 	# join tables on Stimulus
-	df = outerjoin(goodscents_behaviors, goodscents_stimuli; on="Stimulus")
+	_goodscents = outerjoin(goodscents_behaviors, goodscents_stimuli; on="Stimulus")
 	# join with molecules on CID
-	df = innerjoin(df, goodscents_molecules; on="CID")
+	_goodscents = innerjoin(_goodscents, goodscents_molecules; on="CID")
 	# rename and select columns
-	rename!(df, "IsomericSMILES" => "molecule")
-	rename!(df, "Descriptors" => "goodscents_odor")
-	select!(df, ["molecule", "goodscents_odor"])
+	rename!(_goodscents, "IsomericSMILES" => "molecule")
+	rename!(_goodscents, "Descriptors" => "goodscents_odor")
+	select!(_goodscents, ["molecule", "goodscents_odor"])
 	# drop rows with missing data
-	dropmissing!(df)
-	# extract the labels from the raw strings
+	dropmissing!(_goodscents)
+	# # extract the labels from the raw strings
 	transform!(
-		df, 
+		_goodscents, 
 		"goodscents_odor" => col -> [String.(x) for x in split.(col, ";")]; 
 		renamecols=false
 	)
-	# group by SMILES
-	groupby(df, :molecule)
 end
+
+# ╔═╡ 600197f1-a9d5-478b-8fa0-6deac3d25b57
+goodscents_gdf = groupby(_goodscents, :molecule)
 
 # ╔═╡ 2e9eb9ec-7d3c-4042-8d52-1dbc306c7330
 md"""
@@ -295,7 +296,16 @@ Groups representing duplicate and triplicate SMILES:
 """
 
 # ╔═╡ 0f90911c-d106-4e6a-8260-4022085ff5b7
-findall([nrow(x) for x in goodscents_gdf] .> 1) |> length
+ids_duplicates = findall([nrow(x) for x in goodscents_gdf] .> 1)
+
+# ╔═╡ 4578e868-c562-4e55-b107-5f57f9278f67
+length(ids_duplicates)
+
+# ╔═╡ 74678b17-ea44-4f3d-bedc-ba13a7c3d8c7
+duplicate_molecule = goodscents_gdf[ids_duplicates[1]][1, "molecule"]
+
+# ╔═╡ a7e2b7c9-ebfb-45d0-95ac-9c41d7dc4fed
+goodscents_gdf[ids_duplicates[1]]
 
 # ╔═╡ 54bdbcdc-dff8-4771-b1d7-a89c0f4b164c
 md"""
@@ -335,6 +345,9 @@ goodscents = combine(
 	"goodscents_odor" => combine_goodscents; 
 	renamecols=false
 )
+
+# ╔═╡ 4eb6f6a7-a130-40d8-b69f-0f1d8517b72f
+filter(row -> row["molecule"] == duplicate_molecule, goodscents)
 
 # ╔═╡ fa0df4f6-51f8-47cf-8433-09f427833505
 @test length(goodscents_gdf) == nrow(goodscents)
@@ -878,12 +891,17 @@ end
 # ╠═bd1bdb6a-51e8-43f3-85d5-cbf757686cc8
 # ╟─1542471a-0877-4a18-9f48-6f4d96b12e2a
 # ╟─25b4bda4-f2f6-436f-90ec-01c0594118b5
+# ╠═dfd599fa-7991-48cc-b7e0-a0bb0bf9fe11
 # ╠═600197f1-a9d5-478b-8fa0-6deac3d25b57
 # ╟─2e9eb9ec-7d3c-4042-8d52-1dbc306c7330
 # ╠═0f90911c-d106-4e6a-8260-4022085ff5b7
+# ╠═4578e868-c562-4e55-b107-5f57f9278f67
+# ╠═74678b17-ea44-4f3d-bedc-ba13a7c3d8c7
+# ╠═a7e2b7c9-ebfb-45d0-95ac-9c41d7dc4fed
 # ╟─54bdbcdc-dff8-4771-b1d7-a89c0f4b164c
 # ╠═d962f970-e62c-4a05-8219-2c81a54bdaba
 # ╠═9ad586da-ccbc-46e8-8e93-7f59ffb3bfd3
+# ╠═4eb6f6a7-a130-40d8-b69f-0f1d8517b72f
 # ╠═fa0df4f6-51f8-47cf-8433-09f427833505
 # ╟─cdac62a7-5ed3-493b-949d-4796b9ead3dd
 # ╟─e9f70bdb-a67e-4174-b5dd-cc7df6fd3964

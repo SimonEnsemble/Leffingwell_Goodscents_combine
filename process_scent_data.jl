@@ -844,7 +844,7 @@ molecules_per_odor = sort(
 
 # ╔═╡ 28ec1019-f51e-4dd9-a5ca-cfd0a095fcea
 begin
-	fig = Figure(; resolution=(500, 10000))
+	fig = Figure(; resolution=(500, 2000))
 	ax  = Axis(fig[1, 1], 
 		xlabel="# molecules", 
 		ylabel="odor", 

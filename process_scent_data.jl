@@ -591,6 +591,18 @@ transform!(
 	renamecols=false
 )
 
+# ╔═╡ 07d2caca-67da-4cd6-a329-3d241993f3ac
+odors = String.(reduce(union, merged[:, "odor"])) # final odor list
+
+# ╔═╡ 5765952b-8b4e-4a4f-bb38-75a49a5f15ce
+@test !("" in odors)
+
+# ╔═╡ 6318dcf4-4478-4398-bbfc-5c663c078de9
+@test length(filter(o -> o in keys(odor_label_replacements), odors)) == 0
+
+# ╔═╡ 6c547994-0566-4480-b23d-fbdc437431b0
+length(odors)
+
 # ╔═╡ 95513350-d56d-4d68-a97a-dc77b7bfd495
 length(prelim_odors)
 
@@ -618,136 +630,6 @@ examples_per_anomalous_label = [
 	)
 ]
 
-# ╔═╡ 514c4b55-f246-475d-b5bc-67349854e0b4
-md"""
-This yields molecules with no labels left.
-These must be removed.
-"""
-
-# ╔═╡ 39a1c22a-4011-4b15-9604-fd8ebcfc3357
-md"""
-### Success!
-"""
-
-# ╔═╡ 29ea157b-a324-49a0-8412-03d03be9b6e7
-md"""
-## Bitvector Encoding
-"""
-
-# ╔═╡ 2462e47a-4f17-4723-87f8-324a2a570706
-md"""
-We need these data in bit-encoded format.
-"""
-
-# ╔═╡ a3e335ba-ad0a-4c59-865a-905bd8d4aaa0
-md"some checks"
-
-# ╔═╡ 7c889e04-bbee-490b-8cf8-fcc88fca3712
-md"""
-# Write to File
-"""
-
-# ╔═╡ 38810e1d-94d9-4a18-8346-919cc1dba734
-md"""
-## CSV
-"""
-
-# ╔═╡ 9302a9af-ce89-4d2a-a46b-573e3b4257a9
-md"""
-Structures and odor label bitvectors
-"""
-
-# ╔═╡ 4f4c5f24-ed9c-4576-8804-c11b320885f4
-md"""
-## JSON
-"""
-
-# ╔═╡ 7204fe2c-ae72-4a7f-8d89-692bba18517d
-md"""
-Odor label encoding/decoding key
-"""
-
-# ╔═╡ 667f1ff5-d22c-4b8c-b5a4-1148f6741202
-md"""
-# Analysis
-"""
-
-# ╔═╡ 905dc26a-fc2c-47a0-8569-a4b7a4541cfa
-md"""
-Goal: conduct a similar analysis of the olfactory data as in Fig. 3 [here](https://arxiv.org/pdf/1910.10685.pdf).
-"""
-
-# ╔═╡ b520bcf8-1aee-4a17-8e34-4ce97206bd7c
-md"""
-### Odor Labels per Molecule
-"""
-
-# ╔═╡ 28e4e0c5-858d-4d7c-b7d2-3771ab7affb1
-md"""
-List the number of unique olfactory perception labels on each molecule in the data.
-"""
-
-# ╔═╡ a11f06bb-9fcc-431d-9967-f8d26aa44bf2
-analyzed_data = transform(
-	label_freq_corrected2, 
-	"odor" => (col -> map(row -> length(row), col)) => "# odor labels"
-)
-
-# ╔═╡ b562ad25-45e5-4fc9-8d74-27b9727e4766
-md"List the number of molecules with a given number of odor labels.
-
-| # odor labels | # molecules |
-| ---- | ---- |
-| 1 | 703 | 
-| 2 | 665 |
-| ... | ... |
-
-"
-
-# ╔═╡ 0233d3e0-c934-48c2-be82-8e041227aec5
-odor_label_counts = combine(
-	groupby(analyzed_data, "# odor labels"), nrow => "# molecules"
-)
-
-# ╔═╡ ec3b2463-4284-41bb-9c60-63ba8a7b6705
-begin
-	fig2 = Figure(; size=(660, 400))
-	ax2  = Axis(fig2[1, 1],
-		xlabel="# odor labels on a molecule",
-		ylabel="# molecules",
-		xticks=1:25
-	)
-	barplot!(odor_label_counts[:, "# odor labels"], 
-		    odor_label_counts[:, "# molecules"])
-	# ylims!(-1, nrow(odors)+1)
-	fig2
-end
-
-# ╔═╡ 104cf55d-538c-4b5c-a6eb-47c91f20aa6f
-md"""
-### Label Prevalence
-"""
-
-# ╔═╡ 25a5c232-a0f6-4a1b-8f91-3cee5d97b3db
-begin
-	expanded_data = DataFrame(molecule=String[], odor=String[])
-	for row in eachrow(label_freq_corrected2)
-		for odor in row["odor"]
-			push!(expanded_data, [row["molecule"], odor])
-		end
-	end
-	expanded_data
-end
-
-# ╔═╡ 5765952b-8b4e-4a4f-bb38-75a49a5f15ce
-@test !("" in odors)
-
-# ╔═╡ 6318dcf4-4478-4398-bbfc-5c663c078de9
-@test length(filter(o -> o in keys(odor_label_replacements), odors)) == 0
-
-# ╔═╡ 6c547994-0566-4480-b23d-fbdc437431b0
-length(odors)
-
 # ╔═╡ 600de752-8927-493f-b58e-605773bb6c4c
 counts_per_label = Dict(
 	o => count(
@@ -767,11 +649,22 @@ trimmed_merged = transform(
 	renamecols=false
 )
 
+# ╔═╡ 514c4b55-f246-475d-b5bc-67349854e0b4
+md"""
+This yields molecules with no labels left.
+These must be removed.
+"""
+
 # ╔═╡ 83d1567c-b101-4f59-a658-1ff20e8d8b0f
 length.(trimmed_merged.odor) |> minimum
 
 # ╔═╡ 394a567a-8e4e-4c6e-8f22-69e31daca417
 filter!(row -> length(row.odor) > 0, trimmed_merged)
+
+# ╔═╡ 39a1c22a-4011-4b15-9604-fd8ebcfc3357
+md"""
+### Success!
+"""
 
 # ╔═╡ 9deb1a41-1248-47da-aacb-c129863f8db7
 """
@@ -799,6 +692,16 @@ new_counts_per_label = Dict(
 # ╔═╡ f1403f59-3a34-4be8-a5fc-1f04513b80db
 @test all(values(new_counts_per_label) .>= 30)
 
+# ╔═╡ 29ea157b-a324-49a0-8412-03d03be9b6e7
+md"""
+## Bitvector Encoding
+"""
+
+# ╔═╡ 2462e47a-4f17-4723-87f8-324a2a570706
+md"""
+We need these data in bit-encoded format.
+"""
+
 # ╔═╡ 1a0c8ab5-6181-48a0-8a91-02a9bd2c75a4
 label_to_idx = let
 	label_vec = reduce(union, trimmed_merged.odor) 
@@ -817,12 +720,6 @@ function odor_list_to_vector_encoding(odor_list)
 	return vector
 end
 
-# ╔═╡ 35c4865e-24a2-4196-90e1-5c6c6a770a04
-open("odor_key.json"; write=true) do f
-	json = JSON.json(merge(idx_to_label, label_to_idx))
-	write(f, json)
-end;
-
 # ╔═╡ 8584efe5-be9e-42ba-973d-4634bf6ec1bb
 data = let
 	# df = trimmed_merged
@@ -836,8 +733,114 @@ data = let
 	DataFrame("molecule" => trimmed_merged.molecule, cols...)
 end
 
+# ╔═╡ a3e335ba-ad0a-4c59-865a-905bd8d4aaa0
+md"some checks"
+
+# ╔═╡ 1a0fc9ee-6fab-405b-9619-5092e696a777
+begin
+	id_mol_rand = rand(1:nrow(data))
+	@test sum(data[id_mol_rand, 2:end]) == length(trimmed_merged[id_mol_rand, "odor"])
+	for o in trimmed_merged[id_mol_rand, "odor"]
+		@assert data[id_mol_rand, 1 + label_to_idx[o]] == 1
+	end
+end
+
+# ╔═╡ 7c889e04-bbee-490b-8cf8-fcc88fca3712
+md"""
+# Write to File
+"""
+
+# ╔═╡ 38810e1d-94d9-4a18-8346-919cc1dba734
+md"""
+## CSV
+"""
+
+# ╔═╡ 9302a9af-ce89-4d2a-a46b-573e3b4257a9
+md"""
+Structures and odor label bitvectors
+"""
+
 # ╔═╡ 961f8c2c-cf31-47cc-ba96-14ded08c7507
 CSV.write("pyrfume.csv", data);
+
+# ╔═╡ 667f1ff5-d22c-4b8c-b5a4-1148f6741202
+md"""
+# Analysis
+"""
+
+# ╔═╡ 905dc26a-fc2c-47a0-8569-a4b7a4541cfa
+md"""
+Goal: conduct a similar analysis of the olfactory data as in Fig. 3 [here](https://arxiv.org/pdf/1910.10685.pdf).
+"""
+
+# ╔═╡ b520bcf8-1aee-4a17-8e34-4ce97206bd7c
+md"""
+### Odor Labels per Molecule
+"""
+
+# ╔═╡ 28e4e0c5-858d-4d7c-b7d2-3771ab7affb1
+md"""
+List the number of unique olfactory perception labels on each molecule in the data.
+"""
+
+# ╔═╡ a11f06bb-9fcc-431d-9967-f8d26aa44bf2
+transform!(
+	trimmed_merged, 
+	"odor" => (col -> map(row -> length(row), col)) => "# odor labels"
+)
+
+# ╔═╡ b562ad25-45e5-4fc9-8d74-27b9727e4766
+md"List the number of molecules with a given number of odor labels.
+
+| # odor labels | # molecules |
+| ---- | ---- |
+| 1 | 703 | 
+| 2 | 665 |
+| ... | ... |
+
+"
+
+# ╔═╡ 0233d3e0-c934-48c2-be82-8e041227aec5
+odor_label_counts = combine(
+	groupby(trimmed_merged, "# odor labels"), nrow => "# molecules"
+)
+
+# ╔═╡ ec3b2463-4284-41bb-9c60-63ba8a7b6705
+begin
+	fig2 = Figure(; size=(660, 400))
+	ax2  = Axis(fig2[1, 1],
+		xlabel="# odor labels on a molecule",
+		ylabel="# molecules",
+		xticks=1:25
+	)
+	barplot!(odor_label_counts[:, "# odor labels"], 
+		    odor_label_counts[:, "# molecules"])
+	ylims!(0, nothing)
+	fig2
+end
+
+# ╔═╡ 104cf55d-538c-4b5c-a6eb-47c91f20aa6f
+md"""
+### Label Prevalence
+"""
+
+# ╔═╡ 25a5c232-a0f6-4a1b-8f91-3cee5d97b3db
+begin
+	molecule_odor_pairs = DataFrame(molecule=String[], odor=String[])
+	for row in eachrow(trimmed_merged)
+		for odor in row["odor"]
+			push!(molecule_odor_pairs, [row["molecule"], odor])
+		end
+	end
+	molecule_odor_pairs
+end
+
+# ╔═╡ 3d1f7cfa-ae9b-4ed1-9261-595fee65a974
+molecules_per_odor = sort(
+	combine(groupby(molecule_odor_pairs, "odor"), nrow => "# molecules"), 
+	"# molecules";
+	rev=true
+)
 
 # ╔═╡ 28ec1019-f51e-4dd9-a5ca-cfd0a095fcea
 begin
@@ -846,26 +849,13 @@ begin
 		xlabel="# molecules", 
 		ylabel="odor", 
 		title="odor prevalence",
-		yticks=(1:nrow(odors), odors[:, "odor"])
+		yticks=(1:nrow(molecules_per_odor), molecules_per_odor[:, "odor"])
 	)
 	xlims!(0, nothing)
-	barplot!(1:nrow(odors), odors[:, "# molecules"], direction=:x)
-	ylims!(0.0, nrow(odors)+0.5)
+	barplot!(1:nrow(molecules_per_odor), molecules_per_odor[:, "# molecules"], direction=:x)
+	ylims!(0.0, nrow(molecules_per_odor)+0.5)
 	fig
 end
-
-# ╔═╡ 3d1f7cfa-ae9b-4ed1-9261-595fee65a974
-# ╠═╡ disabled = true
-#=╠═╡
-odors = sort!(
-	combine(groupby(expanded_data, "odor"), nrow => "# molecules"), 
-	"# molecules";
-	rev=true
-)
-  ╠═╡ =#
-
-# ╔═╡ 07d2caca-67da-4cd6-a329-3d241993f3ac
-odors = String.(reduce(union, merged[:, "odor"])) # final odor list
 
 # ╔═╡ Cell order:
 # ╠═99004b2e-36f7-11ed-28ae-f3f75c823964
@@ -995,14 +985,12 @@ odors = String.(reduce(union, merged[:, "odor"])) # final odor list
 # ╠═fe2a4aab-85ce-4c2b-b042-3bdf5bf8fba2
 # ╠═fda94ce1-4069-4320-804a-d1f83d9f1073
 # ╠═8584efe5-be9e-42ba-973d-4634bf6ec1bb
-# ╠═a3e335ba-ad0a-4c59-865a-905bd8d4aaa0
+# ╟─a3e335ba-ad0a-4c59-865a-905bd8d4aaa0
+# ╠═1a0fc9ee-6fab-405b-9619-5092e696a777
 # ╟─7c889e04-bbee-490b-8cf8-fcc88fca3712
 # ╟─38810e1d-94d9-4a18-8346-919cc1dba734
 # ╟─9302a9af-ce89-4d2a-a46b-573e3b4257a9
 # ╠═961f8c2c-cf31-47cc-ba96-14ded08c7507
-# ╟─4f4c5f24-ed9c-4576-8804-c11b320885f4
-# ╟─7204fe2c-ae72-4a7f-8d89-692bba18517d
-# ╠═35c4865e-24a2-4196-90e1-5c6c6a770a04
 # ╟─667f1ff5-d22c-4b8c-b5a4-1148f6741202
 # ╟─905dc26a-fc2c-47a0-8569-a4b7a4541cfa
 # ╟─b520bcf8-1aee-4a17-8e34-4ce97206bd7c

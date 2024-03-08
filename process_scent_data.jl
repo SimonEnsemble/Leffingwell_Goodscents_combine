@@ -380,6 +380,30 @@ merged = let
 	select!(df, [:molecule, :odor])
 end
 
+# ╔═╡ 55a1ed69-003a-4702-8226-80cc050a0912
+md"to check, find some molecule in common between the two data sets and make sure they merged correctly."
+
+# ╔═╡ 80c3eaa2-dfa2-4822-9dc6-002dd3fc23c9
+begin
+	common_molecule = pop!(intersect(
+		Set(goodscents[:, "molecule"]),
+		Set(leffingwell[:, "molecule"]),
+	))
+	
+	all_odors = vcat(
+		filter(
+			row -> row["molecule"] == common_molecule, goodscents
+		)[1, "goodscents_odor"],
+		filter(
+			row -> row["molecule"] == common_molecule, leffingwell
+		)[1, "leffingwell_odor"]
+	)
+	
+	@test filter(
+		row -> row["molecule"] == common_molecule, merged
+	)[1, "odor"] == all_odors
+end
+
 # ╔═╡ ebd5497a-799b-4064-b8ac-0365147fb4f8
 md"""
 ## Correct Anomalies
@@ -907,6 +931,8 @@ end
 # ╟─e9f70bdb-a67e-4174-b5dd-cc7df6fd3964
 # ╟─59f4d262-c916-4f62-a1c1-11fda7360027
 # ╠═e03e0656-9198-4419-ac8b-97ef98f37c3f
+# ╟─55a1ed69-003a-4702-8226-80cc050a0912
+# ╠═80c3eaa2-dfa2-4822-9dc6-002dd3fc23c9
 # ╟─ebd5497a-799b-4064-b8ac-0365147fb4f8
 # ╟─768e4669-fcb7-4f40-b050-4944be5e476e
 # ╟─52f5e5aa-93cb-4024-b61d-b912ff235802

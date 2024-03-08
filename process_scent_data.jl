@@ -406,12 +406,19 @@ end
 
 # ╔═╡ ebd5497a-799b-4064-b8ac-0365147fb4f8
 md"""
-## Correct Anomalies
+## Odor label replacements
+we'll store them here then replace at the end.
 """
+
+# ╔═╡ a5ac81f7-2000-40d9-8969-b599fb18ae0d
+odor_label_replacements = Dict{String, String}()
+
+# ╔═╡ c14edce9-c764-4938-b4d3-cdbba49433d1
+prelim_odors = String.(reduce(union, merged.odor))
 
 # ╔═╡ f732f409-283a-46f3-bcc1-9b8913f37fda
 md"""
-### "ABA" Labels
+#### "ABA" Labels
 """
 
 # ╔═╡ 057fff1b-e302-4dcb-9817-199cc2d0bca7
@@ -427,19 +434,13 @@ function is_aba(str)
 end
 
 # ╔═╡ ae23e1fd-e5b6-4829-8fb6-32aa258719e1
-aba_labels = filter(is_aba, reduce(union, merged[:, "odor"]))
+aba_labels = filter(is_aba, prelim_odors)
 
-# ╔═╡ 06cbe47f-0e80-4c95-996a-1d817c34f036
-aba_corrected = transform(
-	merged,
-	:odor => col -> [
-		[is_aba(x) ? String.(split(x))[1] : x for x in row] for row in col
-	];
-	renamecols=false
-)
-
-# ╔═╡ c86249b2-3245-4248-b120-0f16b17cb3e6
-@test length(filter(is_aba, reduce(union, aba_corrected.odor))) == 0
+# ╔═╡ df1e2872-3661-419c-94cb-326899f94efd
+for o in aba_labels
+	odor_label_replacements[o] = split(o)[1]
+	println(o, " => ", odor_label_replacements[o])
+end
 
 # ╔═╡ 0a729562-155c-4911-9c30-40f79c41ecab
 md"""
@@ -458,31 +459,18 @@ function is_cheesy_cheese(str)
 	return length(tokens) == 3 && tokens[1] == "cheesy" && tokens[3] == "cheese"
 end
 
-# ╔═╡ 106d5c5d-edbb-4978-86ed-763eb2acb9f5
-is_cheesy_cheese("cheesy cheddar cheese")
+# ╔═╡ 22907771-f6d7-47b2-8aaf-ee9fbfc96f9c
+cheesy_corrections = filter(o -> is_cheesy_cheese(o), prelim_odors)
 
-# ╔═╡ 30428033-9b5a-49c6-82da-2397b4d5af15
-is_cheesy_cheese("watery coconut water")
-
-# ╔═╡ 4bb4efa8-58ac-4bc6-9c01-6f7d1df9a511
-cheesy_corrected = transform(
-	aba_corrected,
-	:odor => col -> [
-		[is_cheesy_cheese(x) ? "cheesy" : x for x in row] for row in col
-	];
-	renamecols=false
-)
-
-# ╔═╡ c48151a0-f22e-4de5-aa62-7dcdfc86f8f2
-@test nrow(
-	filter(
-		row -> any([is_cheesy_cheese(o) for o in row["odor"]]), 
-		cheesy_corrected)
-) == 0
+# ╔═╡ 775e1f89-12c7-4078-8097-3e906a8b1973
+for o in cheesy_corrections
+	odor_label_replacements[o] = "cheese"
+	println(o, " => ", odor_label_replacements[o])
+end
 
 # ╔═╡ e2326792-be54-4a14-ab8d-04019010c372
 md"""
-### Multi-Word Labels
+#### Multi-Word Labels
 """
 
 # ╔═╡ fd4f1370-5043-4fda-897e-9a62291cbcba
@@ -506,33 +494,23 @@ function two_words_second_meaningless(str)
 	return str
 end
 
-# ╔═╡ ddfe3e46-a152-4db1-93c2-b1ce7a864b59
-peel_corrected = transform(
-	cheesy_corrected,
-	:odor => col -> [two_words_second_meaningless.(row) for row in col];
-	renamecols=false
-)
+# ╔═╡ 6e06d55b-34c4-4937-ae89-e40555cc5bd6
+for o in prelim_odors
+	for word in words_to_drop
+		if occursin(word, o)
+			odor_label_replacements[o] = replace(o, word => "")
+			println(o, " => ", odor_label_replacements[o])
+		end
+	end
+end
 
 # ╔═╡ 64176145-8bb6-4403-890c-a7a981e710fb
 md"""
 ### Currant
 """
 
-# ╔═╡ cdae7d36-abbc-4032-bcc1-c56856fd260b
-filter(row -> any([occursin("currant", o) for o in row["odor"]]), peel_corrected)
-
 # ╔═╡ 1c2842db-d4ac-4e38-94cb-7c9638455c91
-begin
-	currant_forms = String[]
-	for row in eachrow(peel_corrected)
-		for o in row["odor"]
-			if occursin("currant", o)
-				push!(currant_forms, o)
-			end
-		end
-	end
-	currant_forms 
-end
+currant_forms = filter(o -> occursin("currant", o), prelim_odors)
 
 # ╔═╡ e49adaa0-c250-4610-a2f1-baad018867df
 """
@@ -545,14 +523,10 @@ We correct instances of the two alternate forms to `"currant"`.
 """
 
 # ╔═╡ 09996b05-3094-4b51-8b54-e0856f36786a
-currant_corrected = transform(
-	peel_corrected,
-	:odor => col -> [[replace(x, (currant_forms .=> ["currant"])...) for x in row] for row in col];
-	renamecols=false
-)
-
-# ╔═╡ 3ef85ca1-a9c4-40d0-8c4c-f6feafb0a9f5
-filter(row -> any([occursin("currant", o) for o in row["odor"]]), currant_corrected)
+for o in currant_forms
+	odor_label_replacements[o] = "currant"
+	println(o, " => ", odor_label_replacements[o])
+end
 
 # ╔═╡ e0986408-b153-47f6-89e3-8d18b454744f
 @test false
@@ -568,12 +542,6 @@ md"""
 Some labels are present both in noun and adjective form, e.g. "fish" and "fishy"
 """
 
-# ╔═╡ 90e6c8b0-5535-4621-aab9-12ba450585e3
-currant_corrected_labels = reduce(union, currant_corrected.odor)
-
-# ╔═╡ 6c3fa2d5-5da1-4b8e-ad94-d47255141209
-currant_corrected_labels[findall(startswith("fish"), currant_corrected_labels)]
-
 # ╔═╡ ddd438af-9bed-489e-97b6-0e2545e05fc1
 md"""
 These should all be coerced to adjective form:
@@ -581,7 +549,7 @@ These should all be coerced to adjective form:
 
 # ╔═╡ 5809737f-edac-46e3-a5a8-941c8520efe2
 function is_nouny(str)
-	for x in currant_corrected_labels
+	for x in prelim_odors
 		if str == "$(x)y"
 			return true
 		end
@@ -590,26 +558,38 @@ function is_nouny(str)
 end
 
 # ╔═╡ 8050b56a-5fd5-4cd4-b69f-b20c717270ae
-nouny_idx = is_nouny.(currant_corrected_labels) |> findall
+nouny_odors = filter(o -> is_nouny(o), prelim_odors)
 
 # ╔═╡ fa4b6f62-a849-4372-941d-1a140e467082
-nouny_pairs = currant_corrected_labels[nouny_idx] .=> [x[1:end-1] for x in currant_corrected_labels[nouny_idx]]
+for o in nouny_odors
+	odor_label_replacements[o] = o[1:end-1]
+	println(o, " => ", odor_label_replacements[o])
+end
 
-# ╔═╡ e94a4f61-a01a-40e1-ae24-192a8cb41716
-nouny_corrected = transform(
-	currant_corrected,
-	:odor => col -> [replace(row, nouny_pairs...) for row in col] .|> unique;
+# ╔═╡ b94b053c-0834-4854-961e-b78b4e6dfc9d
+md"#### a few more manual replacements"
+
+# ╔═╡ 7de3ca35-3678-4993-9699-658ba0a0493f
+md"Concorde grape => grape"
+
+# ╔═╡ 87bc0133-c5e0-46eb-8aa4-92348ace1389
+odor_label_replacements["concorde grape"] = "grape"
+
+# ╔═╡ bf5649b4-8943-4fc0-ba87-e4fc1b6575bf
+odor_label_replacements["bread baked"] = "bread"
+
+# ╔═╡ 1d1d3868-43f5-4531-97cf-79a089ab793b
+md"#### finally, replace the odor labels"
+
+# ╔═╡ 06a5887c-73d5-41d4-a3a4-661ac6e362c9
+transform!(
+	merged,
+	:odor => col -> [replace(row, odor_label_replacements...) for row in col] .|> unique;
 	renamecols=false
 )
 
-# ╔═╡ 78d50455-fe0a-4dd0-ab69-234e6a917eb8
-begin
-	nouny_corrected_labels = reduce(union, nouny_corrected.odor)
-	@test "spicy" in nouny_corrected_labels
-	@test "cherry" in nouny_corrected_labels
-	@test ! ("fishy" in nouny_corrected_labels)
-	@test ! ("milky" in nouny_corrected_labels)
-end
+# ╔═╡ 95513350-d56d-4d68-a97a-dc77b7bfd495
+length(prelim_odors)
 
 # ╔═╡ 171258ed-f732-44c2-8d8d-4a386ac8f5f2
 md"""
@@ -629,14 +609,14 @@ In fact, all labels with fewer than 30 positive instances are excluded.
 
 # ╔═╡ 1ee63411-94a2-4535-a6bf-1ce62e23a6db
 examples_per_anomalous_label = [
-	anomaly => count(isequal(anomaly), reduce(vcat, currant_corrected.odor)) 
+	anomaly => count(isequal(anomaly), reduce(vcat, merged.odor)) 
 	for anomaly in filter(
-		x -> occursin(" ", x), reduce(union, currant_corrected.odor)
+		x -> occursin(" ", x), reduce(union, merged.odor)
 	)
 ]
 
 # ╔═╡ 24affb80-1e23-4d94-a0fa-e9ad9af5666e
-all_labels = reduce(vcat, currant_corrected.odor) |> unique;
+all_labels = reduce(vcat, nouny_corrected.odor) |> unique
 
 # ╔═╡ 600de752-8927-493f-b58e-605773bb6c4c
 counts_per_label = Dict(
@@ -680,7 +660,7 @@ Every molecule now has at least $(length.(label_freq_corrected2.odor) |> minimum
 """ |> Markdown.parse
 
 # ╔═╡ 20380a67-3b2d-4063-a491-5bfe68706ee8
-length.(label_freq_corrected2.odor) |> minimum
+@test length.(label_freq_corrected2.odor) |> minimum == 1
 
 # ╔═╡ 3f8057f7-3391-4361-9ec5-7f739c66649c
 md"""
@@ -837,12 +817,11 @@ begin
 	expanded_data
 end
 
-# ╔═╡ 3d1f7cfa-ae9b-4ed1-9261-595fee65a974
-odors = sort!(
-	combine(groupby(expanded_data, "odor"), nrow => "# molecules"), 
-	"# molecules";
-	rev=true
-)
+# ╔═╡ 6318dcf4-4478-4398-bbfc-5c663c078de9
+@test length(filter(o -> o in keys(odor_label_replacements), odors)) == 0
+
+# ╔═╡ 6c547994-0566-4480-b23d-fbdc437431b0
+length(odors)
 
 # ╔═╡ 28ec1019-f51e-4dd9-a5ca-cfd0a095fcea
 begin
@@ -858,6 +837,19 @@ begin
 	ylims!(0.0, nrow(odors)+0.5)
 	fig
 end
+
+# ╔═╡ 3d1f7cfa-ae9b-4ed1-9261-595fee65a974
+# ╠═╡ disabled = true
+#=╠═╡
+odors = sort!(
+	combine(groupby(expanded_data, "odor"), nrow => "# molecules"), 
+	"# molecules";
+	rev=true
+)
+  ╠═╡ =#
+
+# ╔═╡ 07d2caca-67da-4cd6-a329-3d241993f3ac
+odors = reduce(union, merged[:, "odor"])
 
 # ╔═╡ Cell order:
 # ╠═99004b2e-36f7-11ed-28ae-f3f75c823964
@@ -923,42 +915,45 @@ end
 # ╟─55a1ed69-003a-4702-8226-80cc050a0912
 # ╠═80c3eaa2-dfa2-4822-9dc6-002dd3fc23c9
 # ╟─ebd5497a-799b-4064-b8ac-0365147fb4f8
+# ╠═a5ac81f7-2000-40d9-8969-b599fb18ae0d
+# ╠═c14edce9-c764-4938-b4d3-cdbba49433d1
 # ╟─f732f409-283a-46f3-bcc1-9b8913f37fda
 # ╟─057fff1b-e302-4dcb-9817-199cc2d0bca7
 # ╠═691057f2-0cbf-482b-8b4c-58601d8f7bcf
 # ╠═ae23e1fd-e5b6-4829-8fb6-32aa258719e1
-# ╠═06cbe47f-0e80-4c95-996a-1d817c34f036
-# ╠═c86249b2-3245-4248-b120-0f16b17cb3e6
+# ╠═df1e2872-3661-419c-94cb-326899f94efd
 # ╟─0a729562-155c-4911-9c30-40f79c41ecab
 # ╟─18df3697-ce68-4697-a27b-1bb74952ec47
 # ╠═f709afff-cede-4af6-bcb9-1df480c3c7e0
-# ╠═106d5c5d-edbb-4978-86ed-763eb2acb9f5
-# ╠═30428033-9b5a-49c6-82da-2397b4d5af15
-# ╠═4bb4efa8-58ac-4bc6-9c01-6f7d1df9a511
-# ╠═c48151a0-f22e-4de5-aa62-7dcdfc86f8f2
+# ╠═22907771-f6d7-47b2-8aaf-ee9fbfc96f9c
+# ╠═775e1f89-12c7-4078-8097-3e906a8b1973
 # ╟─e2326792-be54-4a14-ab8d-04019010c372
 # ╟─fd4f1370-5043-4fda-897e-9a62291cbcba
 # ╠═4ff07081-dd7e-4646-9bcb-9f15b0c75d89
 # ╠═47a135c0-fe63-4a13-a567-f3cd428ab73e
-# ╠═ddfe3e46-a152-4db1-93c2-b1ce7a864b59
+# ╠═6e06d55b-34c4-4937-ae89-e40555cc5bd6
 # ╟─64176145-8bb6-4403-890c-a7a981e710fb
 # ╟─e49adaa0-c250-4610-a2f1-baad018867df
-# ╠═cdae7d36-abbc-4032-bcc1-c56856fd260b
 # ╠═1c2842db-d4ac-4e38-94cb-7c9638455c91
 # ╟─740e23a3-d701-417d-a3b9-659f6a072a0b
 # ╠═09996b05-3094-4b51-8b54-e0856f36786a
-# ╠═3ef85ca1-a9c4-40d0-8c4c-f6feafb0a9f5
 # ╠═e0986408-b153-47f6-89e3-8d18b454744f
 # ╟─b919dd0d-9bc4-46eb-bea2-d6e37da5aaef
 # ╟─0628a48a-e56c-404f-bcb9-c4ee77cd4423
-# ╠═90e6c8b0-5535-4621-aab9-12ba450585e3
-# ╠═6c3fa2d5-5da1-4b8e-ad94-d47255141209
 # ╟─ddd438af-9bed-489e-97b6-0e2545e05fc1
 # ╠═5809737f-edac-46e3-a5a8-941c8520efe2
 # ╠═8050b56a-5fd5-4cd4-b69f-b20c717270ae
 # ╠═fa4b6f62-a849-4372-941d-1a140e467082
-# ╠═e94a4f61-a01a-40e1-ae24-192a8cb41716
-# ╠═78d50455-fe0a-4dd0-ab69-234e6a917eb8
+# ╟─b94b053c-0834-4854-961e-b78b4e6dfc9d
+# ╟─7de3ca35-3678-4993-9699-658ba0a0493f
+# ╠═87bc0133-c5e0-46eb-8aa4-92348ace1389
+# ╠═bf5649b4-8943-4fc0-ba87-e4fc1b6575bf
+# ╟─1d1d3868-43f5-4531-97cf-79a089ab793b
+# ╠═06a5887c-73d5-41d4-a3a4-661ac6e362c9
+# ╠═07d2caca-67da-4cd6-a329-3d241993f3ac
+# ╠═6318dcf4-4478-4398-bbfc-5c663c078de9
+# ╠═6c547994-0566-4480-b23d-fbdc437431b0
+# ╠═95513350-d56d-4d68-a97a-dc77b7bfd495
 # ╟─171258ed-f732-44c2-8d8d-4a386ac8f5f2
 # ╟─f149b713-6e4c-462b-8cc3-ebc2d433d1f8
 # ╟─2020a24e-8dbe-4f2a-9aa3-5999391e7d9d

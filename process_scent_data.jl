@@ -474,7 +474,11 @@ cheesy_corrected = transform(
 )
 
 # ╔═╡ c48151a0-f22e-4de5-aa62-7dcdfc86f8f2
-@test false # how do we know it worked/ the transform did as expected?
+@test nrow(
+	filter(
+		row -> any([is_cheesy_cheese(o) for o in row["odor"]]), 
+		cheesy_corrected)
+) == 0
 
 # ╔═╡ e2326792-be54-4a14-ab8d-04019010c372
 md"""

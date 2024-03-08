@@ -639,6 +639,9 @@ md"""
 We need these data in bit-encoded format.
 """
 
+# ╔═╡ a3e335ba-ad0a-4c59-865a-905bd8d4aaa0
+md"some checks"
+
 # ╔═╡ 7c889e04-bbee-490b-8cf8-fcc88fca3712
 md"""
 # Write to File
@@ -806,35 +809,35 @@ end
 idx_to_label = Dict(v => k for (k, v) in label_to_idx)
 
 # ╔═╡ fda94ce1-4069-4320-804a-d1f83d9f1073
-function list_to_vec(list)
+function odor_list_to_vector_encoding(odor_list)
 	vector = zeros(Int, length(label_to_idx))
-	for label in list
-		vector[label_to_idx[label]] = 1
+	for odor in odor_list
+		vector[label_to_idx[odor]] = 1
 	end
 	return vector
 end
-
-# ╔═╡ 8584efe5-be9e-42ba-973d-4634bf6ec1bb
-data = let
-	df = label_freq_corrected2
-	data = transform(
-		df,
-		:odor => col -> [list_to_vec(row) for row in col];
-		renamecols=false
-	)
-	mat = reduce(hcat, data.odor)' |> Matrix
-	cols = [Symbol("x$i") => copy(col) for (i, col) in enumerate(eachcol(mat))]
-	DataFrame(:molecule => df.molecule, cols...)
-end
-
-# ╔═╡ 961f8c2c-cf31-47cc-ba96-14ded08c7507
-CSV.write("pyrfume.csv", data);
 
 # ╔═╡ 35c4865e-24a2-4196-90e1-5c6c6a770a04
 open("odor_key.json"; write=true) do f
 	json = JSON.json(merge(idx_to_label, label_to_idx))
 	write(f, json)
 end;
+
+# ╔═╡ 8584efe5-be9e-42ba-973d-4634bf6ec1bb
+data = let
+	# df = trimmed_merged
+	data = transform(
+		trimmed_merged,
+		:odor => col -> [odor_list_to_vector_encoding(row) for row in col];
+		renamecols=false
+	)
+	mat = reduce(hcat, data.odor)' |> Matrix
+	cols = [idx_to_label[i] => copy(col) for (i, col) in enumerate(eachcol(mat))]
+	DataFrame("molecule" => trimmed_merged.molecule, cols...)
+end
+
+# ╔═╡ 961f8c2c-cf31-47cc-ba96-14ded08c7507
+CSV.write("pyrfume.csv", data);
 
 # ╔═╡ 28ec1019-f51e-4dd9-a5ca-cfd0a095fcea
 begin
@@ -992,6 +995,7 @@ odors = String.(reduce(union, merged[:, "odor"])) # final odor list
 # ╠═fe2a4aab-85ce-4c2b-b042-3bdf5bf8fba2
 # ╠═fda94ce1-4069-4320-804a-d1f83d9f1073
 # ╠═8584efe5-be9e-42ba-973d-4634bf6ec1bb
+# ╠═a3e335ba-ad0a-4c59-865a-905bd8d4aaa0
 # ╟─7c889e04-bbee-490b-8cf8-fcc88fca3712
 # ╟─38810e1d-94d9-4a18-8346-919cc1dba734
 # ╟─9302a9af-ce89-4d2a-a46b-573e3b4257a9

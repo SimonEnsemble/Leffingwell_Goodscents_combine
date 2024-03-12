@@ -599,7 +599,7 @@ odor_label_replacements
 corrected = let
 	df = deepcopy(merged)
 	for i in 1:10
-		@info "Running round $i"
+		@info "round $i"
 		df2 = transform(
 			df,
 			:odor => col -> [
@@ -607,9 +607,13 @@ corrected = let
 			] .|> unique;
 			renamecols=false
 		)
-		if df == df2
+		df_odors = reduce(union, df.odor)
+		if df_odors == reduce(union, df2.odor)
+			@info "No change. Done!"
 			break
 		else
+			new_problems = [o for o in df_odors if o in keys(odor_label_replacements)]
+			@warn "" new_problems
 			df = df2
 		end
 	end

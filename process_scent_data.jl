@@ -446,7 +446,7 @@ end
 
 # ╔═╡ 0a729562-155c-4911-9c30-40f79c41ecab
 md"""
-### Cheesy Cheese
+#### Cheesy Cheese
 """
 
 # ╔═╡ 18df3697-ce68-4697-a27b-1bb74952ec47
@@ -530,13 +530,9 @@ for o in currant_forms
 	println(o, " => ", odor_label_replacements[o])
 end
 
-# ╔═╡ e0986408-b153-47f6-89e3-8d18b454744f
-@test false
-# why does "currant bud currant bud" occur still?
-
 # ╔═╡ b919dd0d-9bc4-46eb-bea2-d6e37da5aaef
 md"""
-### Noun/Adjective Pairs
+#### Noun/Adjective Pairs
 """
 
 # ╔═╡ 0628a48a-e56c-404f-bcb9-c4ee77cd4423
@@ -580,6 +576,19 @@ odor_label_replacements["concorde grape"] = "grape"
 # ╔═╡ bf5649b4-8943-4fc0-ba87-e4fc1b6575bf
 odor_label_replacements["bread baked"] = "bread"
 
+# ╔═╡ bfd01e02-8b11-4f03-898d-4e4cbcf1ad88
+md"""
+### a caveat 
+"""
+
+# ╔═╡ 8ea79a32-e0ab-449e-aaff-ac0adc98cb79
+md"""
+there are labels that occur in both the keys and values of the replacements dictionary, so the replacement function must be run iteratively until all labels have converged
+"""
+
+# ╔═╡ db0b3074-12fe-48f5-9488-2e77c5e9969a
+in_keys_and_values = keys(odor_label_replacements) ∩ values(odor_label_replacements)
+
 # ╔═╡ 1d1d3868-43f5-4531-97cf-79a089ab793b
 md"#### finally, replace the odor labels"
 
@@ -587,20 +596,34 @@ md"#### finally, replace the odor labels"
 odor_label_replacements
 
 # ╔═╡ 06a5887c-73d5-41d4-a3a4-661ac6e362c9
-transform!(
-	merged,
-	:odor => col -> [replace(row, odor_label_replacements...) for row in col] .|> unique;
-	renamecols=false
-)
+corrected = let
+	df = deepcopy(merged)
+	for i in 1:10
+		@info "Running round $i"
+		df2 = transform(
+			df,
+			:odor => col -> [
+				replace(row, odor_label_replacements...) for row in col
+			] .|> unique;
+			renamecols=false
+		)
+		if df == df2
+			break
+		else
+			df = df2
+		end
+	end
+	df
+end
 
 # ╔═╡ 07d2caca-67da-4cd6-a329-3d241993f3ac
-odors = String.(reduce(union, merged[:, "odor"])) # final odor list
+odors = String.(reduce(union, corrected[:, "odor"])) # final odor list
 
 # ╔═╡ 5765952b-8b4e-4a4f-bb38-75a49a5f15ce
-@test !("" in odors)
+@test length(filter(occursin(" "), odors)) == 0
 
 # ╔═╡ 6318dcf4-4478-4398-bbfc-5c663c078de9
-@test length(filter(o -> o in keys(odor_label_replacements), odors)) == 0
+@test length(filter(in(keys(odor_label_replacements)), odors)) == 0
 
 # ╔═╡ 6c547994-0566-4480-b23d-fbdc437431b0
 length(odors)
@@ -626,16 +649,16 @@ In fact, all labels with fewer than 30 positive instances are excluded.
 
 # ╔═╡ 1ee63411-94a2-4535-a6bf-1ce62e23a6db
 examples_per_anomalous_label = [
-	anomaly => count(isequal(anomaly), reduce(vcat, merged.odor)) 
+	anomaly => count(isequal(anomaly), reduce(vcat, corrected.odor)) 
 	for anomaly in filter(
-		x -> occursin(" ", x), reduce(union, merged.odor)
+		x -> occursin(" ", x), reduce(union, corrected.odor)
 	)
 ]
 
 # ╔═╡ 600de752-8927-493f-b58e-605773bb6c4c
 counts_per_label = Dict(
 	o => count(
-		isequal(o), reduce(vcat, merged.odor)
+		isequal(o), reduce(vcat, corrected.odor)
 	) for o in odors
 )
 
@@ -645,8 +668,8 @@ function is_over_threshold(o)
 end
 
 # ╔═╡ 47cb7741-01da-4bd4-8c05-c818e6c87f6b
-trimmed_merged = transform(
-	merged,
+trimmed = transform(
+	corrected,
 	:odor => col -> [filter(≠(""), [is_over_threshold(o) ? o : "" for o in row]) for row in col];
 	renamecols=false
 )
@@ -658,10 +681,10 @@ These must be removed.
 """
 
 # ╔═╡ 83d1567c-b101-4f59-a658-1ff20e8d8b0f
-length.(trimmed_merged.odor) |> minimum
+length.(trimmed.odor) |> minimum
 
 # ╔═╡ 394a567a-8e4e-4c6e-8f22-69e31daca417
-filter!(row -> length(row.odor) > 0, trimmed_merged)
+filter!(row -> length(row.odor) > 0, trimmed)
 
 # ╔═╡ 39a1c22a-4011-4b15-9604-fd8ebcfc3357
 md"""
@@ -670,25 +693,25 @@ md"""
 
 # ╔═╡ 9deb1a41-1248-47da-aacb-c129863f8db7
 """
-Every molecule now has at least $(length.(trimmed_merged.odor) |> minimum) label...
+Every molecule now has at least $(length.(trimmed.odor) |> minimum) label...
 """ |> Markdown.parse
 
 # ╔═╡ 20380a67-3b2d-4063-a491-5bfe68706ee8
-@test length.(trimmed_merged.odor) |> minimum == 1
+@test length.(trimmed.odor) |> minimum == 1
 
 # ╔═╡ 3f8057f7-3391-4361-9ec5-7f739c66649c
 md"""
-...and there are $(length(reduce(union, trimmed_merged.odor))) labels that are sufficiently frequent.
+...and there are $(length(reduce(union, trimmed.odor))) labels that are sufficiently frequent.
 """
 
 # ╔═╡ 5c7647f0-ed46-4d14-90d7-c95584d45cc4
-length(reduce(union, trimmed_merged.odor))
+length(reduce(union, trimmed.odor))
 
 # ╔═╡ c43ae3db-a34c-4aab-815e-f6820b44e558
 new_counts_per_label = Dict(
 	o => count(
-		isequal(o), reduce(vcat, trimmed_merged.odor)
-	) for o in reduce(union, trimmed_merged.odor)
+		isequal(o), reduce(vcat, trimmed.odor)
+	) for o in reduce(union, trimmed.odor)
 )
 
 # ╔═╡ f1403f59-3a34-4be8-a5fc-1f04513b80db
@@ -706,7 +729,7 @@ We need these data in bit-encoded format.
 
 # ╔═╡ 1a0c8ab5-6181-48a0-8a91-02a9bd2c75a4
 label_to_idx = let
-	label_vec = reduce(union, trimmed_merged.odor) 
+	label_vec = reduce(union, trimmed.odor) 
 	Dict(label_vec .=> eachindex(label_vec))
 end
 
@@ -726,13 +749,13 @@ end
 data = let
 	# df = trimmed_merged
 	data = transform(
-		trimmed_merged,
+		trimmed,
 		:odor => col -> [odor_list_to_vector_encoding(row) for row in col];
 		renamecols=false
 	)
 	mat = reduce(hcat, data.odor)' |> Matrix
 	cols = [idx_to_label[i] => copy(col) for (i, col) in enumerate(eachcol(mat))]
-	DataFrame("molecule" => trimmed_merged.molecule, cols...)
+	DataFrame("molecule" => trimmed.molecule, cols...)
 end
 
 # ╔═╡ a3e335ba-ad0a-4c59-865a-905bd8d4aaa0
@@ -741,8 +764,8 @@ md"some checks"
 # ╔═╡ 1a0fc9ee-6fab-405b-9619-5092e696a777
 begin
 	id_mol_rand = rand(1:nrow(data))
-	@test sum(data[id_mol_rand, 2:end]) == length(trimmed_merged[id_mol_rand, "odor"])
-	for o in trimmed_merged[id_mol_rand, "odor"]
+	@test sum(data[id_mol_rand, 2:end]) == length(trimmed[id_mol_rand, "odor"])
+	for o in trimmed[id_mol_rand, "odor"]
 		@assert data[id_mol_rand, 1 + label_to_idx[o]] == 1
 	end
 end
@@ -786,8 +809,8 @@ List the number of unique olfactory perception labels on each molecule in the da
 """
 
 # ╔═╡ a11f06bb-9fcc-431d-9967-f8d26aa44bf2
-transform!(
-	trimmed_merged, 
+labels_counted = transform(
+	trimmed, 
 	"odor" => (col -> map(row -> length(row), col)) => "# odor labels"
 )
 
@@ -804,7 +827,7 @@ md"List the number of molecules with a given number of odor labels.
 
 # ╔═╡ 0233d3e0-c934-48c2-be82-8e041227aec5
 odor_label_counts = combine(
-	groupby(trimmed_merged, "# odor labels"), nrow => "# molecules"
+	groupby(labels_counted, "# odor labels"), nrow => "# molecules"
 )
 
 # ╔═╡ ec3b2463-4284-41bb-9c60-63ba8a7b6705
@@ -829,7 +852,7 @@ md"""
 # ╔═╡ 25a5c232-a0f6-4a1b-8f91-3cee5d97b3db
 begin
 	molecule_odor_pairs = DataFrame(molecule=String[], odor=String[])
-	for row in eachrow(trimmed_merged)
+	for row in eachrow(labels_counted)
 		for odor in row["odor"]
 			push!(molecule_odor_pairs, [row["molecule"], odor])
 		end
@@ -945,7 +968,6 @@ end
 # ╠═1c2842db-d4ac-4e38-94cb-7c9638455c91
 # ╟─740e23a3-d701-417d-a3b9-659f6a072a0b
 # ╠═09996b05-3094-4b51-8b54-e0856f36786a
-# ╠═e0986408-b153-47f6-89e3-8d18b454744f
 # ╟─b919dd0d-9bc4-46eb-bea2-d6e37da5aaef
 # ╟─0628a48a-e56c-404f-bcb9-c4ee77cd4423
 # ╟─ddd438af-9bed-489e-97b6-0e2545e05fc1
@@ -956,6 +978,9 @@ end
 # ╟─7de3ca35-3678-4993-9699-658ba0a0493f
 # ╠═87bc0133-c5e0-46eb-8aa4-92348ace1389
 # ╠═bf5649b4-8943-4fc0-ba87-e4fc1b6575bf
+# ╟─bfd01e02-8b11-4f03-898d-4e4cbcf1ad88
+# ╟─8ea79a32-e0ab-449e-aaff-ac0adc98cb79
+# ╠═db0b3074-12fe-48f5-9488-2e77c5e9969a
 # ╟─1d1d3868-43f5-4531-97cf-79a089ab793b
 # ╠═ceecd769-357c-4bfe-aefa-c479ce6bab4e
 # ╠═06a5887c-73d5-41d4-a3a4-661ac6e362c9

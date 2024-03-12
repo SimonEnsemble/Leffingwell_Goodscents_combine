@@ -6,7 +6,9 @@ using InteractiveUtils
 
 # ╔═╡ 99004b2e-36f7-11ed-28ae-f3f75c823964
 begin
-	import Pkg; Pkg.activate()#"."; io=devnull)
+	import Pkg
+	Pkg.activate("."; io=devnull)
+	Pkg.instantiate(; io=devnull)
 	using CSV, DataFrames, JSON
 	using CairoMakie, Colors, PlutoTest, PlutoUI
 	TableOfContents(; title="Odor Data Processing", depth=3)

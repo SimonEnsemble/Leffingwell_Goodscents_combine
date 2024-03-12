@@ -1,6 +1,7 @@
-# combine the Leffingwell and Goodscents (molecule, odor) data set
+# Combine the [Leffingwell and Goodscents](https://github.com/pyrfume/pyrfume-data) (molecule, odor) data sets.
 
-`"process_scent_data.jl"` contains all the code for processing and combining the two datasets.
+Running `julia "process_scent_data.jl"` downloads, processes, and combines the two datasets.
+It is also a [Pluto](https://plutojl.org/) notebook.
 
 `"process_scent_data.html"` shows the result of running the code.
 

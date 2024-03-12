@@ -701,11 +701,19 @@ Every molecule now has at least $(length.(trimmed.odor) |> minimum) label...
 
 # ╔═╡ 3f8057f7-3391-4361-9ec5-7f739c66649c
 md"""
-...and there are $(length(reduce(union, trimmed.odor))) labels that are sufficiently frequent.
+...and there are $(length(reduce(union, trimmed.odor))) labels that are sufficiently frequent...
 """
 
 # ╔═╡ 5c7647f0-ed46-4d14-90d7-c95584d45cc4
 length(reduce(union, trimmed.odor))
+
+# ╔═╡ 73f7cec2-da0e-4f94-a67c-ea8716051ae4
+md"""
+...including "odorless"
+"""
+
+# ╔═╡ 9faf164e-60f7-4bc9-8a94-b04e70e55b8a
+@test "odorless" in reduce(union, trimmed.odor)
 
 # ╔═╡ c43ae3db-a34c-4aab-815e-f6820b44e558
 new_counts_per_label = Dict(
@@ -747,7 +755,6 @@ end
 
 # ╔═╡ 8584efe5-be9e-42ba-973d-4634bf6ec1bb
 data = let
-	# df = trimmed_merged
 	data = transform(
 		trimmed,
 		:odor => col -> [odor_list_to_vector_encoding(row) for row in col];
@@ -764,7 +771,7 @@ md"some checks"
 # ╔═╡ 1a0fc9ee-6fab-405b-9619-5092e696a777
 begin
 	id_mol_rand = rand(1:nrow(data))
-	@test sum(data[id_mol_rand, 2:end]) == length(trimmed[id_mol_rand, "odor"])
+	@assert sum(data[id_mol_rand, 2:end]) == length(trimmed[id_mol_rand, "odor"])
 	for o in trimmed[id_mol_rand, "odor"]
 		@assert data[id_mol_rand, 1 + label_to_idx[o]] == 1
 	end
@@ -787,6 +794,9 @@ Structures and odor label bitvectors
 
 # ╔═╡ 961f8c2c-cf31-47cc-ba96-14ded08c7507
 CSV.write("pyrfume.csv", data);
+
+# ╔═╡ 0f4342b4-1343-47bd-a555-c351c2fa7c03
+@test isfile("pyrfume.csv")
 
 # ╔═╡ 667f1ff5-d22c-4b8c-b5a4-1148f6741202
 md"""
@@ -815,15 +825,7 @@ labels_counted = transform(
 )
 
 # ╔═╡ b562ad25-45e5-4fc9-8d74-27b9727e4766
-md"List the number of molecules with a given number of odor labels.
-
-| # odor labels | # molecules |
-| ---- | ---- |
-| 1 | 703 | 
-| 2 | 665 |
-| ... | ... |
-
-"
+md"List the number of molecules with a given number of odor labels."
 
 # ╔═╡ 0233d3e0-c934-48c2-be82-8e041227aec5
 odor_label_counts = combine(
@@ -1004,6 +1006,8 @@ end
 # ╠═20380a67-3b2d-4063-a491-5bfe68706ee8
 # ╟─3f8057f7-3391-4361-9ec5-7f739c66649c
 # ╠═5c7647f0-ed46-4d14-90d7-c95584d45cc4
+# ╟─73f7cec2-da0e-4f94-a67c-ea8716051ae4
+# ╠═9faf164e-60f7-4bc9-8a94-b04e70e55b8a
 # ╠═c43ae3db-a34c-4aab-815e-f6820b44e558
 # ╠═f1403f59-3a34-4be8-a5fc-1f04513b80db
 # ╟─29ea157b-a324-49a0-8412-03d03be9b6e7
@@ -1018,6 +1022,7 @@ end
 # ╟─38810e1d-94d9-4a18-8346-919cc1dba734
 # ╟─9302a9af-ce89-4d2a-a46b-573e3b4257a9
 # ╠═961f8c2c-cf31-47cc-ba96-14ded08c7507
+# ╠═0f4342b4-1343-47bd-a555-c351c2fa7c03
 # ╟─667f1ff5-d22c-4b8c-b5a4-1148f6741202
 # ╟─905dc26a-fc2c-47a0-8569-a4b7a4541cfa
 # ╟─b520bcf8-1aee-4a17-8e34-4ce97206bd7c

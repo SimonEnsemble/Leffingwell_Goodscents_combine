@@ -1,384 +1,844 @@
 ### A Pluto.jl notebook ###
-# v0.19.37
+# v0.19.40
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ 99004b2e-36f7-11ed-28ae-f3f75c823964
 begin
-	import Pkg; Pkg.activate()
-	using CSV, DataFrames, CairoMakie, PlutoUI, Colors, LinearAlgebra, MolecularGraph
+	import Pkg
+	Pkg.activate("."; io=devnull)
+	Pkg.instantiate(; io=devnull)
+	using CSV, DataFrames, JSON
+	using CairoMakie, Colors, PlutoTest, PlutoUI
+	TableOfContents(; title="Odor Data Processing", depth=3)
 end
 
-# ╔═╡ eb94cba7-7bbe-4948-bcdb-99e24fb36386
-TableOfContents()
-
-# ╔═╡ d952b919-f534-432a-a5c9-44bb98063ab2
-md"tuning the theme for `Makie`."
-
-# ╔═╡ f1538e5a-c3ce-4c19-a588-ca89d7cb7d1f
-update_theme!(
-	resolution=(500, 400), 
-	font="Noto Sans", 
-	linewidth=3, 
-	backgroundcolor="#FAF7F2", 
-	Axis=(xgridstyle=:dash, 
-		  ygridstyle=:dash, 
-		  xtickalign=1, 
-		  ytickalign=1, 
-		  titlefont="Noto Sans"
-	),
-	palette = (color=["#34495e", "#3498db", "#2ecc71", "#f1c40f", 
-					"#e74c3c", "#9b59b6", "#1abc9c", "#f39c12",
-					"#d35400"], 
-			   marker=[:circle, :utriangle, :cross, :rect, 
-				 	 :diamond, :dtriangle, :pentagon, :xcross]
+# ╔═╡ e3e38b40-e41d-4afc-9054-a253287a82bb
+update_theme!(;
+		resolution=(500, 400), 
+		font="Noto Sans", 
+		linewidth=3, 
+		backgroundcolor="#FAF7F2", 
+		Axis=(;
+			xgridstyle=:dash, 
+			ygridstyle=:dash, 
+			xtickalign=1, 
+			ytickalign=1, 
+			titlefont="Noto Sans"
+		),
+		palette=(;
+			color=[
+				"#34495e", 
+				"#3498db", 
+				"#2ecc71", 
+				"#f1c40f", 
+				"#e74c3c", 
+				"#9b59b6", 
+				"#1abc9c", 
+				"#f39c12",
+				"#d35400"
+			],
+			marker=[
+				:circle,
+				:utriangle, 
+				:cross, 
+				:rect, 
+				:diamond, 
+				:dtriangle, 
+				:pentagon, 
+				:xcross
+			]
+		)
 	)
-)
 
-# ╔═╡ f548409f-bb9b-4903-b66f-c76ac64e0e31
-md"# processing odorant perception data
+# ╔═╡ 6946a79a-8141-4028-b3e9-db109437a407
+md"""
+# Objective
+"""
 
-**objective**: pre-process, combine, and analyze the odorant perception data of _Goodscents_ and _Leffingwell_, obtained from [_The Pyrfume Project_](https://pyrfume.org/). 
+# ╔═╡ b0a910b0-2a75-4db5-8b8d-9bbb2b46dc64
+md"""
+Pre-process, combine, and summarize the odorant perception data of _Goodscents_ and _Leffingwell_, obtained from [_The Pyrfume Project's_](https://pyrfume.org/) data [repository](https://github.com/pyrfume/pyrfume-data/). 
+"""
 
-!!! warning \"the data\"
-	loosely, each instance in the tabular data fundamentally represents the outcome of an experiment where we expose a human to a pure compound and ask them what it smells like.
+# ╔═╡ adedc0fc-5651-47c1-a687-bc6952cdd894
+md"""
+We combine these data mimicking the procedure described in:
 
-!!! note \"why are we doing this?\"
-	we combine this data to mimic the procedure in [\"Machine Learning for Scent: Learning Generalizable
-	Perceptual Representations of Small Molecules\"](https://arxiv.org/abs/1910.10685). this study treated the machine learning task of odorant perception as a multi-class classification problem: a molecule is input to the machine learning model, and the output is the predicted odor descriptor for the molecule. 
-	i.e., the machine learning model serves as a surrogate for the olfactory perception system in humans! read more at the [Google AI blog](https://ai.googleblog.com/2019/10/learning-to-smell-using-deep-learning.html). a more recent follow-up olfactory study was published in _Science_ [here](https://www.science.org/doi/10.1126/science.ade4401).
+!!! citation ""	
+	[\"Machine Learning for Scent: Learning Generalizable Perceptual Representations of Small Molecules\"](https://arxiv.org/abs/1910.10685).
 
-!!! note \"the raw data\"
-	I wrote a Python script `get_data.py` that employs the `pyrfume` package to query the raw data from Goodscents and Leffingwell. both the Python script and the resulting `.csv` files are on the Github repo [here](https://github.com/SimonEnsemble/CHE599_intro_data_sci_F2023/tree/main/activites/odorant_data_processing).
+This study treated the machine learning task of odorant perception as a multi-class classification problem: a molecule is input to the machine learning model, and the output is the predicted odor descriptor for the molecule. Read more at the [Google AI blog](https://ai.googleblog.com/2019/10/learning-to-smell-using-deep-learning.html). A more recent follow-up olfactory study was published in _Science_ [here](https://www.science.org/doi/10.1126/science.ade4401).
+"""
 
-!!! note \"SMILES strings\"
-	[simplified molecular-input line-entry system (SMILES)](https://en.wikipedia.org/wiki/Simplified_molecular-input_line-entry_system) is used to specify the molecule in the olfaction survey.
+# ╔═╡ 7fc6a021-b62b-4293-88a6-d564468deebd
+md"""
+# Pre-Process Sources
+"""
 
-"
+# ╔═╡ 19b9aae7-02dc-4f73-81b6-e48f22421078
+md"""
+## Description
+"""
 
-# ╔═╡ 4c6c310e-130c-4334-86c0-74b271c5a353
-md"## read in and process the Leffingwell data set
+# ╔═╡ 5c2147bb-7f80-421a-8e03-908d3f99e3e6
+md"""
+### Odors
+"""
 
-### behaviors
+# ╔═╡ f5f1a79a-2422-4c37-9e7a-40e5bdbac693
+md"""
+Each instance in the tabular data represents the outcome of an experiment where a human is given a sample of a pure compound and asked to describe what it smells like.
+"""
 
-👃 read in `behaviors_sparse.csv`, which lists the olfactory perception labels on the molecules in the Leffingwell data set, as a `DataFrame`, `leffingwell_behaviors`.
-"
+# ╔═╡ 90169515-5113-4563-b36c-b7e9c2aefc81
+md"""
+### Molecules
+"""
+
+# ╔═╡ dc2863e3-2cb1-40c9-ac64-de422553c820
+md"""
+The [simplified molecular-input line-entry system (SMILES)](https://en.wikipedia.org/wiki/Simplified_molecular-input_line-entry_system) is used to specify the molecular structure of the substance provided in the olfaction survey.
+"""
+
+# ╔═╡ d86cea70-e801-4a1b-aacb-80ffb03781ba
+md"""
+## GitHub Commit
+"""
+
+# ╔═╡ 80ba1d37-955a-4ae2-82ef-50455a70985c
+md"""
+We use the data from the following commit, which was the most recent as of mid-February 2024.  `pyrfume` has an API for downloading the most recent commit, but not for a specific commit, so we enforce data stability this way.
+"""
+
+# ╔═╡ 0ee9fcde-d4af-4b86-9252-df991e60268b
+pyrfume_commit = "0e9652c4fde822ad4009d175feb4cfeb7e80d3f7";
+
+# ╔═╡ 9408afd6-e0e4-4f09-8f9e-b2ad40960f81
+md"""
+## Downloading Raw Data
+"""
+
+# ╔═╡ 7cf09702-6e16-432e-9f63-73ca7ffba8c4
+md"""
+Each raw data file will be downloaded from GitHub and loaded into a `DataFrame`.
+"""
+
+# ╔═╡ 1d3a8bb4-1e6c-4961-b88e-ddd48d8ec020
+"""
+download a specific commit of a file from the pyrfume GitHub data repository and return the CSV data as a `DataFrame`
+"""
+function get_raw_data(file; commit=pyrfume_commit)
+	@assert endswith(file, ".csv")
+	url = "https://raw.githubusercontent.com/pyrfume/pyrfume-data/$commit/$file"
+	filepath = download(url)
+	df = CSV.read(filepath, DataFrame)
+	return df
+end
+
+# ╔═╡ 328c17c1-bac3-4c61-80fd-233bf0f84cc0
+md"""## Read and Process Leffingwell
+"""
+
+# ╔═╡ c30f3299-767a-46f6-b9e1-ee4585e99ff7
+md"""
+### Behaviors
+"""
+
+# ╔═╡ 22146540-9de7-4040-a6ac-cbf816f7b78e
+md"""
+`behaviors_sparse.csv` lists the olfactory perception labels of the molecules in the Leffingwell data set, which we load as `leffingwell_behaviors`:
+"""
 
 # ╔═╡ dc7bd01b-17d7-4276-986e-e273d6072430
-leffingwell_behaviors = CSV.read(joinpath("leffingwell", "behavior_sparse.csv"), DataFrame)
+leffingwell_behaviors = get_raw_data("leffingwell/behavior_sparse.csv")
 
-# ╔═╡ 9583319c-abbf-4986-8a0e-c98aaba0bfdd
-md"### stimuli
+# ╔═╡ 9e046a92-90f5-4b6a-8fe2-5b741e761f15
+md"""
+### Stimuli
+"""
 
-👃 read in `stimuli.csv` as a `DataFrame`, `leffingwell_stimuli`."
+# ╔═╡ b0350dd9-0d90-4cc5-8b48-dfb8ce7dfda0
+md"""
+`stimuli.csv` lists various identifiers for each chemical stimulus, along with their molecular weights and SMILES representations.
+"""
 
 # ╔═╡ 00f67da6-4d8f-46cf-bdf1-4baba2b33253
-leffingwell_stimuli = CSV.read(joinpath("leffingwell", "stimuli.csv"), DataFrame)
+leffingwell_stimuli = get_raw_data("leffingwell/stimuli.csv")
 
-# ╔═╡ 4c232ff2-5d7a-4c70-88ce-bf9937b01076
-md"### join
-👃 we wish to match up molecules described by their SMILES strings with their olfactory perception labels. join the `leffingwell_stimuli` and `leffingwell_behaviors` data tables to do so. assign the joined tables to a variable `leffingwell`.
-"
+# ╔═╡ 8277ab12-b194-42e1-9802-46feff993227
+md"""
+### Join
+"""
 
-# ╔═╡ 19613f27-7358-417e-b77d-15d734a88e42
-leffingwell = outerjoin(leffingwell_behaviors, leffingwell_stimuli, on="Stimulus")
+# ╔═╡ 463188aa-615c-4426-b7de-50cd816716f7
+md"""
+Join `leffingwell_stimuli` and `leffingwell_behaviors` using each molecule's unique `"Stimulus"`, drop all columns except `"IsomericSMILES"` and `"Labels"`, and rename these to `"molecule"` and `"odor"`, and extract the individual labels from the raw strings.
+"""
 
-# ╔═╡ fdc340bd-28f1-4278-88ef-1edbe4f5bb7f
-md"
-### trim/clean
-👃 to avoid distraction, remove all columns from the `leffingwell` data frame except for the `\"IsomericSMILES\"` and `\"Labels\"` columns."
-
-# ╔═╡ 5fc8cd54-139c-4511-9c42-e06a2b992a68
-select!(leffingwell, ["IsomericSMILES", "Labels"])
-
-# ╔═╡ 5957d5e7-a71e-4e10-a33c-959885a91f36
-md"👃 for clarity, rename the `\"IsomericSMILES\"` column in `leffingwell` to `\"molecule\"` and the `\"Labels\"` column to `\"odor (Leffingwell)\"`."
-
-# ╔═╡ de7614bb-2037-46c2-9fa3-1d7590f672ce
-rename!(leffingwell, 
-		"Labels" => "odor (Leffingwell)", 
-		"IsomericSMILES"=>"molecule")
-
-# ╔═╡ 397a08ef-5ff3-41a2-8d13-78d9c72ad706
-md"👃 in the `\"odor (Leffingwell)\"` column, remove all characters `]`, `[`, `'`, and `,` in preparation for splitting the long string into a vector of odor perception labels.
-
-!!! hint
-	use `transform!`. you can over-write a column. also use the `replace` command for `String`'s.
-"
-
-# ╔═╡ 6e6f641c-f6c6-4387-9271-ffc32b69f5d4
-transform!(leffingwell, "odor (Leffingwell)" => 
-		  (col -> map(s -> replace(s, "["=>"", "'"=>"", ","=>"", "]"=>""), col)) =>
-		  "odor (Leffingwell)")
-
-# ╔═╡ 8f5e6978-9016-4bff-ae41-033f5be4219a
-md"👃 compare the number of _unique_ molecules in the rows of the `leffingwell` data frame with the number of rows. i.e., is the molecule represented in each row unique?"
-
-# ╔═╡ bc94bbbe-c2e4-46bf-804c-e51256b2373d
-length(unique(leffingwell[:, "molecule"])) == nrow(leffingwell)
-
-# ╔═╡ 89422b3f-72f9-4de4-bb5e-76a975376b38
-md"## read in and process the Goodscents data
-
-### behaviors
-👃 read in the `behaviors.csv` of the Goodscents data set as a data frame, `goodscents_behaviors`. the odor perception labels are stored in the `\"Descriptors\"` column, and the identity of the molecule is indicated by the `\"Stimulus\"` column.
-"
-
-# ╔═╡ 07ce7883-f61f-4113-99ba-2195b4e41dfa
-goodscents_behaviors = CSV.read(joinpath("goodscents", "behavior.csv"), DataFrame)
-
-# ╔═╡ 08b97919-4b89-494f-80d4-ab3aec6da6c5
-md"### stimuli
-👃 read in the `stimuli.csv` of the Goodscents data set as a data frame, `goodscents_stimuli`."
-
-# ╔═╡ f7d72939-f78d-476a-978a-b48fe6a51cec
-goodscents_stimuli = CSV.read(joinpath("goodscents", "stimuli.csv"), DataFrame)
-
-# ╔═╡ 46eeac6d-77ac-4002-9fb0-43f4e9fb42d1
-md"### molecules
-👃 read in the `molecules.csv` of the Goodscents data set as a data frame, `goodscents_molecules`."
-
-# ╔═╡ bd1bdb6a-51e8-43f3-85d5-cbf757686cc8
-goodscents_molecules = CSV.read(joinpath("goodscents", "molecules.csv"), DataFrame)
-
-# ╔═╡ 540533e3-7a14-4f01-a291-e4bb8b86fda9
-md"### join
-
-👃 again, we wish to join the three tables so as to link together (i) the molecule described by its SMILES string with (ii) its odor perception labels. conduct these necessary joins and assign the final joined table as `goodscents`.
-"
-
-# ╔═╡ 90f9b206-6e16-440e-801c-8ac198ad970a
-goodscents_beh_st = outerjoin(goodscents_behaviors, goodscents_stimuli, on="Stimulus")
-
-# ╔═╡ 600197f1-a9d5-478b-8fa0-6deac3d25b57
-goodscents = innerjoin(goodscents_beh_st, goodscents_molecules, on="CID")
-
-# ╔═╡ 25fcc550-342c-46f5-b70d-74314c9680f6
-md"### trim/clean
-
-for clarity and to remove distraction, modify the `goodscents` data frame by:
-* renaming the `\"IsomericSMILES\"` column to \"molecule\"
-* renaming the `\"Descriptors\"` column to `\"odor (Goodscents)\"`.
-* removing all columns except `\"molecule\"` and `\"odor (Goodscents)\"`.
-"
-
-# ╔═╡ 0ef23c71-c420-4f0c-8f7b-5ee2da0d765a
-begin
-	rename!(goodscents, "IsomericSMILES" => "molecule")
-	rename!(goodscents, "Descriptors" => "odor (Goodscents)")
-	select!(goodscents, ["molecule", "odor (Goodscents)"])
+# ╔═╡ f7d020c8-50be-4329-8551-907edf81d605
+"""
+transform a column of values by removing square brackets and commas and splitting on single quotes, followed by discarding artifact strings
+"""
+function transform_leffingwell(col)
+	# remove invalid characters
+	replacement_pairs = ["$x" => "" for x in "[,]"]
+	col = [replace(row, replacement_pairs...) for row in col]
+	# split on single quotes
+	col = split.(col, '\''; keepempty=false)
+	# remove the single-space strings that are left behind
+	return [filter(≠(" "), s) for s in col]
 end
 
-# ╔═╡ 5366f0cf-e533-4b91-a5aa-e6d116fca206
-md"👃 display the rows with missing entries so we can see what molecules they pertain to and see how many there are.
+# ╔═╡ 19613f27-7358-417e-b77d-15d734a88e42
+leffingwell = let
+	df = outerjoin(leffingwell_behaviors, leffingwell_stimuli, on="Stimulus")
+	select!(df, ["IsomericSMILES", "Labels"])
+	rename!(df, "Labels" => "leffingwell_odor", "IsomericSMILES"=>"molecule")
+	transform!(df, "leffingwell_odor" => transform_leffingwell; renamecols=false)
+end
 
-!!! hint
-	`filter`
-"
+# ╔═╡ a71a4c95-b3e7-49c7-b729-236869118729
+md"""
+Check that all molecules have at least one odor label.
+"""
 
-# ╔═╡ 7f5d3228-e1a4-4972-b3b1-37650267859c
-filter(row -> ismissing(row["odor (Goodscents)"]), goodscents)
+# ╔═╡ 378f3ff8-e693-4852-886b-b192eed33f67
+@assert all(length.(leffingwell.leffingwell_odor) .> 0)
 
-# ╔═╡ e0aa196d-bbd2-42ff-8ba1-95f3f9120db4
-md"👃 drop the missing rows from the `goodscents` data table."
+# ╔═╡ 8f5e6978-9016-4bff-ae41-033f5be4219a
+md"""
+Check for SMILES uniqueness.
+"""
 
-# ╔═╡ 7844b67b-b329-4fdb-8b2e-dd386b8e00e6
-dropmissing!(goodscents)
+# ╔═╡ bc94bbbe-c2e4-46bf-804c-e51256b2373d
+@assert length(unique(leffingwell[:, "molecule"])) == nrow(leffingwell)
 
-# ╔═╡ a5d0d0de-b54e-4e11-8176-8c2cb45f15e5
-md"👃 to make the `\"odor (Goodscents)\"` column match the formatting of labels in the `leffingwell` data frame, convert the `;` characters to spaces."
+# ╔═╡ 5ba1bb77-e905-4508-aa72-c8e5e168b616
+md"""
+## Read and Process Goodscents 
+"""
 
-# ╔═╡ 0efb02f9-c787-4565-aa58-cd4cc8f5fbb6
-transform!(goodscents, "odor (Goodscents)" => 
-		  (col -> map(s -> replace(s, ";"=>" "), col)) =>
-		  "odor (Goodscents)")
+# ╔═╡ ff0b9207-68f7-4218-85b5-5995de34ab61
+md"""
+### Behaviors
+"""
 
-# ╔═╡ e221d029-7526-4cb1-9df5-fd9624f74635
-md"👃 compare the number _unique_ molecules (SMILES strings) in the `goodscents` data frame with the number of rows in it.
+# ╔═╡ 7ee15b57-15f1-4b64-ac09-53e9d0dbb550
+md"""
+Load `behaviors.csv` from Goodscents. Perception labels are stored in the `"Descriptors"` column, and the identity of the molecule is indicated by the `"Stimulus"` column.
+"""
 
-!!! hint
-	there are duplicate molecules! 😱
-"
+# ╔═╡ 07ce7883-f61f-4113-99ba-2195b4e41dfa
+goodscents_behaviors = get_raw_data("goodscents/behavior.csv")
 
-# ╔═╡ 1c87d0fd-8eef-4284-8d9d-05e02472d26e
-length(unique(goodscents[:, "molecule"]))
+# ╔═╡ d0979277-3d2d-431e-af4c-d87a3ba7cb03
+md"""
+### Stimuli
+"""
 
-# ╔═╡ 14a1bb54-35fe-4e77-acab-fca1f7671165
-nrow(goodscents)
+# ╔═╡ 2b826866-62dc-4f53-bccc-658602f624a7
+md"""
+Read `stimuli.csv`.
+"""
 
-# ╔═╡ eff6c147-d2d0-4cb6-8ff7-67a9c7469a9e
-md"👃 display the rows of the data frame that pertain to duplicate molecules. sort according to the molecule to _really easily_ see the duplications. 
+# ╔═╡ f7d72939-f78d-476a-978a-b48fe6a51cec
+goodscents_stimuli = get_raw_data("goodscents/stimuli.csv")
 
-!!! hint
-	use `filter`. I found it to have 119 rows.
-"
+# ╔═╡ 5d229608-2d37-430a-97e1-cd95f0e44058
+md"""
+### Molecules
+"""
 
-# ╔═╡ 1a0004f9-714a-4fda-beb8-b38647bc223a
-sort(
-	filter(
-		row -> sum(row["molecule"] .== goodscents[:, "molecule"]) > 1,
-		goodscents
-	), 
-	"molecule"
-)
+# ╔═╡ 3cee2486-1904-43a6-933a-303d933267a6
+md"""
+Read `molecules.csv`.
+"""
+
+# ╔═╡ bd1bdb6a-51e8-43f3-85d5-cbf757686cc8
+goodscents_molecules = get_raw_data("goodscents/molecules.csv")
+
+# ╔═╡ 1542471a-0877-4a18-9f48-6f4d96b12e2a
+md"""
+### Join
+"""
+
+# ╔═╡ 25b4bda4-f2f6-436f-90ec-01c0594118b5
+md"""
+Join the three tables so as to link together (i) the molecule described by its SMILES string with (ii) its odor perception labels.  Rename `"IsomericSMILES"` to `"molecule"`, rename `"Descriptors"` to `"odor"`, and drop all columns except `"molecule"` and `"odor"`.  Finally, drop all rows with `missing` data, and group by molecule to find duplicate SMILES.
+"""
+
+# ╔═╡ dfd599fa-7991-48cc-b7e0-a0bb0bf9fe11
+begin
+	# join tables on Stimulus
+	_goodscents = outerjoin(goodscents_behaviors, goodscents_stimuli; on="Stimulus")
+	# join with molecules on CID
+	_goodscents = innerjoin(_goodscents, goodscents_molecules; on="CID")
+	# rename and select columns
+	rename!(_goodscents, "IsomericSMILES" => "molecule")
+	rename!(_goodscents, "Descriptors" => "goodscents_odor")
+	select!(_goodscents, ["molecule", "goodscents_odor"])
+	# drop rows with missing data
+	dropmissing!(_goodscents)
+	# # extract the labels from the raw strings
+	transform!(
+		_goodscents, 
+		"goodscents_odor" => col -> [String.(x) for x in split.(col, ";")]; 
+		renamecols=false
+	)
+end
+
+# ╔═╡ 600197f1-a9d5-478b-8fa0-6deac3d25b57
+goodscents_gdf = groupby(_goodscents, :molecule)
+
+# ╔═╡ 2e9eb9ec-7d3c-4042-8d52-1dbc306c7330
+md"""
+Groups representing duplicate and triplicate SMILES:
+"""
+
+# ╔═╡ 0f90911c-d106-4e6a-8260-4022085ff5b7
+ids_duplicates = findall([nrow(x) for x in goodscents_gdf] .> 1)
+
+# ╔═╡ 4578e868-c562-4e55-b107-5f57f9278f67
+length(ids_duplicates)
+
+# ╔═╡ 74678b17-ea44-4f3d-bedc-ba13a7c3d8c7
+duplicate_molecule = goodscents_gdf[ids_duplicates[1]][1, "molecule"]
+
+# ╔═╡ a7e2b7c9-ebfb-45d0-95ac-9c41d7dc4fed
+goodscents_gdf[ids_duplicates[1]]
 
 # ╔═╡ 54bdbcdc-dff8-4771-b1d7-a89c0f4b164c
-md"👃 merge rows in `goodscents` that pertain to the same molecule by concatenating the list of their odors with a space in between. e.g.
+md"""
+Merge rows by concatenating odor lists
 
-| molecule | odor (Goodscents) |
+| molecule | goodscents_odor |
 | --- | ----------- |
 | \"C(=O)O\" | \"acetic vinegar pungent\" |
 | \"C(=O)O\" | \"acetic fermented sharp fruity\" |
 
 --->
 
-| molecule | odor (Goodscents) |
+| molecule | goodscents_odor |
 | --- | ----------- |
 | \"C(=O)O\" | \"acetic vinegar pungent acetic fermented sharp fruity\" |
-
-we will remove duplicate odor labels later.
-
-!!! hint
-	I wrote a function `combine_col` and used it for a `combine` and `groupby`. also, string concatenation works as follows: `\"cory\" * \" \" * \"simon\"`.
-
-assign the new data frame as `goodscents_fixed`.
-"
+"""
 
 # ╔═╡ d962f970-e62c-4a05-8219-2c81a54bdaba
-function combine_col(col)
-	new_col = ""
-	for row in col
-		new_col *= " " * row
+"""
+combine a column from a `GroupedDataFrame` into a single odor list per group
+"""
+function combine_goodscents(gcol)
+	# gcol is the odor column from a single group
+	if length(gcol) == 1
+		# the group is already formatted properly
+		return gcol
+	else
+		# the group needs to be merged
+		new_col = reduce(union, gcol)
+		return [new_col]
 	end
-	return new_col
 end
 
 # ╔═╡ 9ad586da-ccbc-46e8-8e93-7f59ffb3bfd3
-goodscents_fixed = combine(
-	groupby(goodscents, "molecule"), 
-	        "odor (Goodscents)" => combine_col => "odor (Goodscents)")
+goodscents = combine(
+	goodscents_gdf, 
+	"goodscents_odor" => combine_goodscents; 
+	renamecols=false
+)
 
-# ╔═╡ 614195ed-bd2f-444f-ac82-f2b8511117da
-md"👃 check, _now_, that the number of rows in `goodscents_fixed` is equal to the number of unique molecules in the `\"molecules\"` column."
+# ╔═╡ 4eb6f6a7-a130-40d8-b69f-0f1d8517b72f
+filter(row -> row["molecule"] == duplicate_molecule, goodscents)
 
-# ╔═╡ 1704b383-163e-47e8-93ea-9e28170fbb6d
-nrow(goodscents_fixed) == length(unique(goodscents_fixed[:, "molecule"]))
+# ╔═╡ fa0df4f6-51f8-47cf-8433-09f427833505
+@test length(goodscents_gdf) == nrow(goodscents)
 
-# ╔═╡ 26a2edab-2bb5-4ca6-89ff-d2358ae9512c
-md"## 🚀 join the Leffingwell and Goodscents data sets
+# ╔═╡ cdac62a7-5ed3-493b-949d-4796b9ead3dd
+md"""
+# Join Data Sets
+"""
 
-👃 conduct an outer-join of your `leffingwell` and `goodscents_fixed` data frames. of course, join on the `molecule`. explain what we mean by \"outer join\". assigned the joined data as a data frame `_data`.
-"
+# ╔═╡ e9f70bdb-a67e-4174-b5dd-cc7df6fd3964
+md"""
+## Merge
+"""
 
-# ╔═╡ b3c8b89e-0806-410e-b991-f288454811e6
-_data = outerjoin(goodscents_fixed, leffingwell, on="molecule")
-
-# ╔═╡ f6768d02-f015-4a0b-bce0-5478e7d613f1
-md"how many molecules:
-* are present in the joined data frame, `data`?
-judging from the pattern of `missing`'s, 
-* are present in _both_ the Leffingwell and Goodscents data sets?
-* are present in the Goodscents data set, but not the Leffingwell data set?
-* are present in the Leffingwell data set, but not the Goodscents data set?
-"
-
-# ╔═╡ 1e270a21-497e-48fb-bdc5-7d25634e7e98
-nrow(_data)
-
-# ╔═╡ 20a0fee0-1436-409d-93c1-07c2cb15c31b
-nrow(dropmissing(_data))
-
-# ╔═╡ 526c3b02-0aca-413d-b45b-f8ed477e494c
-nrow(dropmissing(_data, "odor (Leffingwell)"))
-
-# ╔═╡ 7ed96a3d-3509-4c1d-8b40-9abc67f42b9c
-nrow(dropmissing(_data, "odor (Goodscents)"))
-
-# ╔═╡ e02f4169-d3b5-4807-a561-ad8004ebdd7d
-md"
-👃 getting ready to combine the odor columns into one, replace each occurance of `missing` with an empty string `\"\"`. assign the resulting data frame to variable `data`.
-"
+# ╔═╡ 59f4d262-c916-4f62-a1c1-11fda7360027
+md"""
+Join `leffingwell` and `goodscents` on `"molecule"`, replace each occurance of `missing` with an empty `Vector`, and then take the union of the labels from the two data sets.
+"""
 
 # ╔═╡ e03e0656-9198-4419-ac8b-97ef98f37c3f
-data = coalesce.(_data, " ")
+merged = let
+	df = outerjoin(goodscents, leffingwell; makeunique=true, on="molecule")
+	df = coalesce.(df, [[]])
+	transform!(
+		df, 
+		["goodscents_odor", "leffingwell_odor"] => 
+			((col1, col2) -> col1 .∪ col2) => 
+			"odor"
+	)
+	select!(df, [:molecule, :odor])
+end
 
-# ╔═╡ d83bcd9b-895f-47b8-b99e-a6eaabd9a62c
-md"👃 append a new column to `data`, `\"odor\"` that contains the union of the odor labels from the Goodscents and Leffingwell studies.
+# ╔═╡ 55a1ed69-003a-4702-8226-80cc050a0912
+md"to check, find some molecule in common between the two data sets and make sure they merged correctly."
 
-!!! hint
-	use `transform` where two columns are combined. this is a string concatenation. ensure you put a space between the words to avoid eg. `grassyfishy`.
-"
+# ╔═╡ 80c3eaa2-dfa2-4822-9dc6-002dd3fc23c9
+begin
+	common_molecule = pop!(intersect(
+		Set(goodscents[:, "molecule"]),
+		Set(leffingwell[:, "molecule"]),
+	))
+	
+	all_odors = vcat(
+		filter(
+			row -> row["molecule"] == common_molecule, goodscents
+		)[1, "goodscents_odor"],
+		filter(
+			row -> row["molecule"] == common_molecule, leffingwell
+		)[1, "leffingwell_odor"]
+	)
+	
+	@test filter(
+		row -> row["molecule"] == common_molecule, merged
+	)[1, "odor"] == all_odors
+end
 
-# ╔═╡ 58930559-7dd7-461b-8ca8-cdeab3cdb14f
-transform!(data, 
-	["odor (Goodscents)", "odor (Leffingwell)"] => 
-	((col1, col2) -> col1 .* " " .* col2) => "odor"
+# ╔═╡ ebd5497a-799b-4064-b8ac-0365147fb4f8
+md"""
+## Odor label replacements
+we'll store them here then replace at the end.
+"""
+
+# ╔═╡ a5ac81f7-2000-40d9-8969-b599fb18ae0d
+odor_label_replacements = Dict{String, String}()
+
+# ╔═╡ c14edce9-c764-4938-b4d3-cdbba49433d1
+prelim_odors = String.(reduce(union, merged.odor))
+
+# ╔═╡ f732f409-283a-46f3-bcc1-9b8913f37fda
+md"""
+#### "ABA" Labels
+"""
+
+# ╔═╡ 057fff1b-e302-4dcb-9817-199cc2d0bca7
+md"""
+Some labels are composites of the form "A B A", like "cherry maraschino cherry".
+We convert these to simply "A", as the "B" word is mostly meaningless in isolation:
+"""
+
+# ╔═╡ 691057f2-0cbf-482b-8b4c-58601d8f7bcf
+function is_aba(str)
+	tokens = split(str)
+	return length(tokens) == 3 && tokens[1] == tokens[3]
+end
+
+# ╔═╡ ae23e1fd-e5b6-4829-8fb6-32aa258719e1
+aba_labels = filter(is_aba, prelim_odors)
+
+# ╔═╡ df1e2872-3661-419c-94cb-326899f94efd
+for o in aba_labels
+	odor_label_replacements[o] = split(o)[1]
+	println(o, " => ", odor_label_replacements[o])
+end
+
+# ╔═╡ 0a729562-155c-4911-9c30-40f79c41ecab
+md"""
+#### Cheesy Cheese
+"""
+
+# ╔═╡ 18df3697-ce68-4697-a27b-1bb74952ec47
+md"""
+Some labels are of the particular format "cheesy X cheese", where "X" is a particular cheese variety, e.g. parmesan.
+These are each reduced simply to "cheesy"
+"""
+
+# ╔═╡ f709afff-cede-4af6-bcb9-1df480c3c7e0
+function is_cheesy_cheese(str)
+	tokens = split(str)
+	return length(tokens) == 3 && tokens[1] == "cheesy" && tokens[3] == "cheese"
+end
+
+# ╔═╡ 22907771-f6d7-47b2-8aaf-ee9fbfc96f9c
+cheesy_corrections = filter(o -> is_cheesy_cheese(o), prelim_odors)
+
+# ╔═╡ 775e1f89-12c7-4078-8097-3e906a8b1973
+for o in cheesy_corrections
+	odor_label_replacements[o] = "cheese"
+	println(o, " => ", odor_label_replacements[o])
+end
+
+# ╔═╡ e2326792-be54-4a14-ab8d-04019010c372
+md"""
+#### Multi-Word Labels
+"""
+
+# ╔═╡ fd4f1370-5043-4fda-897e-9a62291cbcba
+md"""
+Some labels are multi-word phrases, like "lemon peel", where the second word contributes very little.
+The second word of these phrases can be dropped.
+"""
+
+# ╔═╡ 4ff07081-dd7e-4646-9bcb-9f15b0c75d89
+words_to_drop = [
+	" skin", " peel", " rind", " leaf", " needle", " yolk", " root", " chip", " flesh", " seed", " fat", " juice", " butter"
+];
+
+# ╔═╡ 47a135c0-fe63-4a13-a567-f3cd428ab73e
+function two_words_second_meaningless(str)
+	for word in words_to_drop
+		if occursin(word, str)
+			return replace(str, word => "")
+		end
+	end
+	return str
+end
+
+# ╔═╡ 6e06d55b-34c4-4937-ae89-e40555cc5bd6
+for o in prelim_odors
+	for word in words_to_drop
+		if occursin(word, o)
+			odor_label_replacements[o] = replace(o, word => "")
+			println(o, " => ", odor_label_replacements[o])
+		end
+	end
+end
+
+# ╔═╡ 64176145-8bb6-4403-890c-a7a981e710fb
+md"""
+### Currant
+"""
+
+# ╔═╡ 1c2842db-d4ac-4e38-94cb-7c9638455c91
+currant_forms = filter(o -> occursin("currant", o), prelim_odors)
+
+# ╔═╡ e49adaa0-c250-4610-a2f1-baad018867df
+"""
+The odor of blackcurrant is encoded $(length(currant_forms)) different ways:
+""" |> Markdown.parse
+
+# ╔═╡ 740e23a3-d701-417d-a3b9-659f6a072a0b
+md"""
+We correct instances of the two alternate forms to `"currant"`.
+"""
+
+# ╔═╡ 09996b05-3094-4b51-8b54-e0856f36786a
+for o in currant_forms
+	odor_label_replacements[o] = "currant"
+	println(o, " => ", odor_label_replacements[o])
+end
+
+# ╔═╡ b919dd0d-9bc4-46eb-bea2-d6e37da5aaef
+md"""
+#### Noun/Adjective Pairs
+"""
+
+# ╔═╡ 0628a48a-e56c-404f-bcb9-c4ee77cd4423
+md"""
+Some labels are present both in noun and adjective form, e.g. "fish" and "fishy"
+"""
+
+# ╔═╡ ddd438af-9bed-489e-97b6-0e2545e05fc1
+md"""
+These should all be coerced to adjective form:
+"""
+
+# ╔═╡ 5809737f-edac-46e3-a5a8-941c8520efe2
+function is_nouny(str)
+	for x in prelim_odors
+		if str == "$(x)y"
+			return true
+		end
+	end
+	return false
+end
+
+# ╔═╡ 8050b56a-5fd5-4cd4-b69f-b20c717270ae
+nouny_odors = filter(o -> is_nouny(o), prelim_odors)
+
+# ╔═╡ fa4b6f62-a849-4372-941d-1a140e467082
+for o in nouny_odors
+	odor_label_replacements[o] = o[1:end-1]
+	println(o, " => ", odor_label_replacements[o])
+end
+
+# ╔═╡ b94b053c-0834-4854-961e-b78b4e6dfc9d
+md"#### a few more manual replacements"
+
+# ╔═╡ 7de3ca35-3678-4993-9699-658ba0a0493f
+md"Concorde grape => grape"
+
+# ╔═╡ 87bc0133-c5e0-46eb-8aa4-92348ace1389
+odor_label_replacements["concorde grape"] = "grape"
+
+# ╔═╡ bf5649b4-8943-4fc0-ba87-e4fc1b6575bf
+odor_label_replacements["bread baked"] = "bread"
+
+# ╔═╡ bfd01e02-8b11-4f03-898d-4e4cbcf1ad88
+md"""
+### a caveat 
+"""
+
+# ╔═╡ 8ea79a32-e0ab-449e-aaff-ac0adc98cb79
+md"""
+there are labels that occur in both the keys and values of the replacements dictionary, so the replacement function must be run iteratively until all labels have converged
+"""
+
+# ╔═╡ db0b3074-12fe-48f5-9488-2e77c5e9969a
+in_keys_and_values = keys(odor_label_replacements) ∩ values(odor_label_replacements)
+
+# ╔═╡ 1d1d3868-43f5-4531-97cf-79a089ab793b
+md"#### finally, replace the odor labels"
+
+# ╔═╡ ceecd769-357c-4bfe-aefa-c479ce6bab4e
+odor_label_replacements
+
+# ╔═╡ 06a5887c-73d5-41d4-a3a4-661ac6e362c9
+corrected = let
+	df = deepcopy(merged)
+	for i in 1:10
+		@info "round $i"
+		df2 = transform(
+			df,
+			:odor => col -> [
+				replace(row, odor_label_replacements...) for row in col
+			] .|> unique;
+			renamecols=false
+		)
+		df_odors = reduce(union, df.odor)
+		if df_odors == reduce(union, df2.odor)
+			@info "No change. Done!"
+			break
+		else
+			new_problems = [o for o in df_odors if o in keys(odor_label_replacements)]
+			@warn "" new_problems
+			df = df2
+		end
+	end
+	df
+end
+
+# ╔═╡ 07d2caca-67da-4cd6-a329-3d241993f3ac
+odors = String.(reduce(union, corrected[:, "odor"])) # final odor list
+
+# ╔═╡ 5765952b-8b4e-4a4f-bb38-75a49a5f15ce
+@test length(filter(occursin(" "), odors)) == 0
+
+# ╔═╡ 6318dcf4-4478-4398-bbfc-5c663c078de9
+@test length(filter(in(keys(odor_label_replacements)), odors)) == 0
+
+# ╔═╡ 6c547994-0566-4480-b23d-fbdc437431b0
+length(odors)
+
+# ╔═╡ 95513350-d56d-4d68-a97a-dc77b7bfd495
+length(prelim_odors)
+
+# ╔═╡ 171258ed-f732-44c2-8d8d-4a386ac8f5f2
+md"""
+## Final Processing
+"""
+
+# ╔═╡ f149b713-6e4c-462b-8cc3-ebc2d433d1f8
+md"""
+### Label Frequency
+"""
+
+# ╔═╡ 2020a24e-8dbe-4f2a-9aa3-5999391e7d9d
+md"""
+The remaining multi-word labels are sufficiently rare to excuse their exclusion.
+In fact, all labels with fewer than 30 positive instances are excluded.
+"""
+
+# ╔═╡ 1ee63411-94a2-4535-a6bf-1ce62e23a6db
+examples_per_anomalous_label = [
+	anomaly => count(isequal(anomaly), reduce(vcat, corrected.odor)) 
+	for anomaly in filter(
+		x -> occursin(" ", x), reduce(union, corrected.odor)
+	)
+]
+
+# ╔═╡ 600de752-8927-493f-b58e-605773bb6c4c
+counts_per_label = Dict(
+	o => count(
+		isequal(o), reduce(vcat, corrected.odor)
+	) for o in odors
 )
 
-# ╔═╡ 788a8f26-b22a-4035-ab15-20c8d776fa71
-md"👃 convert the `odor` column, currently a long `String` where olfactory labels are separated by spaces, into a vector of `String`'s, one for each olfactory perception label. also, avoid repeated olfactory labels on the same molecule using `unique`."
+# ╔═╡ d0ef14c9-391c-4af8-b915-d86c8aefd002
+function is_over_threshold(o)
+	return counts_per_label[o] ≥ 30
+end
 
-# ╔═╡ 5b968cbc-e084-4a4b-be7b-59947e760175
-transform!(data,
-	"odor" =>
-	 (col -> map(row -> unique(split(row)), col))
-	=> "odor"
+# ╔═╡ 47cb7741-01da-4bd4-8c05-c818e6c87f6b
+trimmed = transform(
+	corrected,
+	:odor => col -> [filter(≠(""), [is_over_threshold(o) ? o : "" for o in row]) for row in col];
+	renamecols=false
 )
 
-# ╔═╡ 664a1da4-e753-4617-9dd6-09e7e1fea44d
-md"👃 to avoid distraction, delete all columns from `data` except for `\"molecule\"` and `\"odor\"`.
-"
+# ╔═╡ 514c4b55-f246-475d-b5bc-67349854e0b4
+md"""
+This yields molecules with no labels left.
+These must be removed.
+"""
 
-# ╔═╡ 5dbf1a4d-60f1-4d34-947b-cf6408b4c903
-select!(data, ["molecule", "odor"])
+# ╔═╡ 83d1567c-b101-4f59-a658-1ff20e8d8b0f
+length.(trimmed.odor) |> minimum
 
-# ╔═╡ d44d24ed-5c20-4003-bbb3-75a5dec7b499
-md"🚀 voila! this is the joined data! machine learning studies are predicated on large data sets, so combining the data from these two sources should help with e.g. predictivity of the smell of a molecule by a machine learning algorithm trained on this data (compared to e.g. just using Leffingwell or Goodscents alone).
-"
+# ╔═╡ 394a567a-8e4e-4c6e-8f22-69e31daca417
+filter!(row -> length(row.odor) > 0, trimmed)
+
+# ╔═╡ 39a1c22a-4011-4b15-9604-fd8ebcfc3357
+md"""
+### Success!
+"""
+
+# ╔═╡ 9deb1a41-1248-47da-aacb-c129863f8db7
+"""
+Every molecule now has at least $(length.(trimmed.odor) |> minimum) label...
+""" |> Markdown.parse
+
+# ╔═╡ 20380a67-3b2d-4063-a491-5bfe68706ee8
+@test length.(trimmed.odor) |> minimum == 1
+
+# ╔═╡ 3f8057f7-3391-4361-9ec5-7f739c66649c
+md"""
+...and there are $(length(reduce(union, trimmed.odor))) labels that are sufficiently frequent...
+"""
+
+# ╔═╡ 5c7647f0-ed46-4d14-90d7-c95584d45cc4
+length(reduce(union, trimmed.odor))
+
+# ╔═╡ 73f7cec2-da0e-4f94-a67c-ea8716051ae4
+md"""
+...including "odorless"
+"""
+
+# ╔═╡ 9faf164e-60f7-4bc9-8a94-b04e70e55b8a
+@test "odorless" in reduce(union, trimmed.odor)
+
+# ╔═╡ c43ae3db-a34c-4aab-815e-f6820b44e558
+new_counts_per_label = Dict(
+	o => count(
+		isequal(o), reduce(vcat, trimmed.odor)
+	) for o in reduce(union, trimmed.odor)
+)
+
+# ╔═╡ f1403f59-3a34-4be8-a5fc-1f04513b80db
+@test all(values(new_counts_per_label) .>= 30)
+
+# ╔═╡ 29ea157b-a324-49a0-8412-03d03be9b6e7
+md"""
+## Bitvector Encoding
+"""
+
+# ╔═╡ 2462e47a-4f17-4723-87f8-324a2a570706
+md"""
+We need these data in bit-encoded format.
+"""
+
+# ╔═╡ 1a0c8ab5-6181-48a0-8a91-02a9bd2c75a4
+label_to_idx = let
+	label_vec = reduce(union, trimmed.odor) 
+	Dict(label_vec .=> eachindex(label_vec))
+end
+
+# ╔═╡ fe2a4aab-85ce-4c2b-b042-3bdf5bf8fba2
+idx_to_label = Dict(v => k for (k, v) in label_to_idx)
+
+# ╔═╡ fda94ce1-4069-4320-804a-d1f83d9f1073
+function odor_list_to_vector_encoding(odor_list)
+	vector = zeros(Int, length(label_to_idx))
+	for odor in odor_list
+		vector[label_to_idx[odor]] = 1
+	end
+	return vector
+end
+
+# ╔═╡ 8584efe5-be9e-42ba-973d-4634bf6ec1bb
+data = let
+	data = transform(
+		trimmed,
+		:odor => col -> [odor_list_to_vector_encoding(row) for row in col];
+		renamecols=false
+	)
+	mat = reduce(hcat, data.odor)' |> Matrix
+	cols = [idx_to_label[i] => copy(col) for (i, col) in enumerate(eachcol(mat))]
+	DataFrame("molecule" => trimmed.molecule, cols...)
+end
+
+# ╔═╡ a3e335ba-ad0a-4c59-865a-905bd8d4aaa0
+md"some checks"
+
+# ╔═╡ 1a0fc9ee-6fab-405b-9619-5092e696a777
+begin
+	id_mol_rand = rand(1:nrow(data))
+	@assert sum(data[id_mol_rand, 2:end]) == length(trimmed[id_mol_rand, "odor"])
+	for o in trimmed[id_mol_rand, "odor"]
+		@assert data[id_mol_rand, 1 + label_to_idx[o]] == 1
+	end
+end
 
 # ╔═╡ 7c889e04-bbee-490b-8cf8-fcc88fca3712
-md"### write to file"
+md"""
+# Write to File
+"""
 
-# ╔═╡ 76385438-6751-41b9-ae56-caaee4cca266
-data
+# ╔═╡ 38810e1d-94d9-4a18-8346-919cc1dba734
+md"""
+## CSV
+"""
+
+# ╔═╡ 9302a9af-ce89-4d2a-a46b-573e3b4257a9
+md"""
+Structures and odor label bitvectors
+"""
 
 # ╔═╡ 961f8c2c-cf31-47cc-ba96-14ded08c7507
-CSV.write("goodscents_leffingwell_combined.csv", data)
+CSV.write("pyrfume.csv", data);
+
+# ╔═╡ 0f4342b4-1343-47bd-a555-c351c2fa7c03
+@test isfile("pyrfume.csv")
+
+# ╔═╡ 667f1ff5-d22c-4b8c-b5a4-1148f6741202
+md"""
+# Analysis
+"""
 
 # ╔═╡ 905dc26a-fc2c-47a0-8569-a4b7a4541cfa
-md"## analysis of the joined data
-the goal here is to conduct a similar analysis of the olfactory data as in Fig. 3 [here](https://arxiv.org/pdf/1910.10685.pdf).
-"
+md"""
+Goal: conduct a similar analysis of the olfactory data as in Fig. 3 [here](https://arxiv.org/pdf/1910.10685.pdf).
+"""
 
-# ╔═╡ 9208b96f-963f-4fca-9a2e-3803160f11b1
-md"
-### odor labels per molecule
-👃 append a new column to `data`, `\"# odor labels\"`, that lists the number of unique olfactory perception labels on each molecule in the data."
+# ╔═╡ b520bcf8-1aee-4a17-8e34-4ce97206bd7c
+md"""
+### Odor Labels per Molecule
+"""
+
+# ╔═╡ 28e4e0c5-858d-4d7c-b7d2-3771ab7affb1
+md"""
+List the number of unique olfactory perception labels on each molecule in the data.
+"""
 
 # ╔═╡ a11f06bb-9fcc-431d-9967-f8d26aa44bf2
-transform!(data, "odor" => (col -> map(row -> length(row), col)) => "# odor labels")
+labels_counted = transform(
+	trimmed, 
+	"odor" => (col -> map(row -> length(row), col)) => "# odor labels"
+)
 
 # ╔═╡ b562ad25-45e5-4fc9-8d74-27b9727e4766
-md"👃 create a data frame `odor_label_counts` that lists the # of molecules with a given number of odor labels.
-
-| # odor labels | # molecules |
-| ---- | ---- |
-| 1 | 703 | 
-| 2 | 665 |
-| ... | ... |
-
-"
+md"List the number of molecules with a given number of odor labels."
 
 # ╔═╡ 0233d3e0-c934-48c2-be82-8e041227aec5
-odor_label_counts = combine(groupby(data, "# odor labels"), nrow => "# molecules")
-
-# ╔═╡ 2a2910af-dcf2-4aa7-bfc3-32950d73cc9e
-md"👃 like in Fig. 3a [here](https://arxiv.org/pdf/1910.10685.pdf) (yours will be a bit different), create a bar plot visualizing the number of molecules with a given number of olfactory labels on it. use your data frame `odor_label_counts` for this."
+odor_label_counts = combine(
+	groupby(labels_counted, "# odor labels"), nrow => "# molecules"
+)
 
 # ╔═╡ ec3b2463-4284-41bb-9c60-63ba8a7b6705
 begin
-	fig2 = Figure(resolution=(660, 400))
+	fig2 = Figure(; size=(660, 400))
 	ax2  = Axis(fig2[1, 1],
 		xlabel="# odor labels on a molecule",
 		ylabel="# molecules",
@@ -386,242 +846,196 @@ begin
 	)
 	barplot!(odor_label_counts[:, "# odor labels"], 
 		    odor_label_counts[:, "# molecules"])
-	# ylims!(-1, nrow(odors)+1)
+	ylims!(0, nothing)
 	fig2
 end
 
-# ╔═╡ 53f58ff1-1f99-4205-9346-bf2f8ad4e74d
-md"
-### molecules that smell a certain way
-👃 how many molecules in the data include a label \"eucalyptus\"?"
-
-# ╔═╡ b1a04dc4-b281-413d-8cc0-3f704d1e6e3b
-nrow(filter(row -> "eucalyptus" in row["odor"], data))
-
-# ╔═╡ 82b4049e-5c34-43a4-85e4-fd95c1693989
-md"👃 draw the molecular structure of the molecules that are labeled \"mint\" _and_ \"eucalyptus\".
-
-!!! hint
-	use `smilestomol` [here](https://mojaie.github.io/MolecularGraph.jl_notebook/molecular_graph_basics.jl.html).
-"
-
-# ╔═╡ 9e69ba26-4f61-4b54-94d8-986ed3d5a704
-mint_and_eucalyptus = filter(
-	row -> "mint" in row["odor"] && "eucalyptus" in row["odor"], 
-	data
-)
-
-# ╔═╡ c8c928e8-f16c-4c6c-a807-5d64183e6d4d
-smilestomol(mint_and_eucalyptus[1, "molecule"])
-
-# ╔═╡ 832897f7-88fb-4389-b051-51adfec3db01
-smilestomol(mint_and_eucalyptus[2, "molecule"])
-
-# ╔═╡ 64bfc9fb-5866-426d-93ce-90521bf93356
-smilestomol(mint_and_eucalyptus[3, "molecule"])
-
-# ╔═╡ 47478ef0-a512-47d4-a171-74e073cab810
-md"
-### molecules per odor label
-👃 we now wish to visualize the prevalence of each odor descriptor. create a bar plot that shows, for each unique odor label, how many molecules have that odor (according to the experts in the studies). 
-* sort the bars according to odor prevalance
-* make the bars go from left to right
-* include the odor name on the y-axis
-* include x- and y-axis labels (x-axis = # molecules, y-axis = odor)
-
-in my view, this is a better way to present the (actually, MORE) information (than) in Fig. 3b [here](https://arxiv.org/pdf/1910.10685.pdf).
-
-!!! warning
-	this is very challenging. 
-
-!!! hint
-	to actually read the many odor labels, use `Figure(resolution=(500, 10000))` to make a long figure that you can scroll through.
-"
+# ╔═╡ 104cf55d-538c-4b5c-a6eb-47c91f20aa6f
+md"""
+### Label Prevalence
+"""
 
 # ╔═╡ 25a5c232-a0f6-4a1b-8f91-3cee5d97b3db
 begin
-	expanded_data = DataFrame(molecule=String[], odor=String[])
-	for row in eachrow(data)
+	molecule_odor_pairs = DataFrame(molecule=String[], odor=String[])
+	for row in eachrow(labels_counted)
 		for odor in row["odor"]
-			push!(expanded_data, [row["molecule"], odor])
+			push!(molecule_odor_pairs, [row["molecule"], odor])
 		end
 	end
-	expanded_data
+	molecule_odor_pairs
 end
 
-# ╔═╡ 75e8312d-1614-4626-99d1-3e07fdec8bab
-unique(expanded_data[:, "odor"])
-
 # ╔═╡ 3d1f7cfa-ae9b-4ed1-9261-595fee65a974
-odors = combine(groupby(expanded_data, "odor"), nrow => "# molecules")
-
-# ╔═╡ fa50cac7-64f9-4439-9645-c6c0b4fa0b99
-sort!(odors, "# molecules", rev=true)
+molecules_per_odor = sort(
+	combine(groupby(molecule_odor_pairs, "odor"), nrow => "# molecules"), 
+	"# molecules";
+	rev=true
+)
 
 # ╔═╡ 28ec1019-f51e-4dd9-a5ca-cfd0a095fcea
 begin
-	fig = Figure(resolution=(500, 10000))
+	fig = Figure(; resolution=(500, 2000))
 	ax  = Axis(fig[1, 1], 
 		xlabel="# molecules", 
 		ylabel="odor", 
 		title="odor prevalence",
-		yticks=(1:nrow(odors), odors[:, "odor"])
+		yticks=(1:nrow(molecules_per_odor), molecules_per_odor[:, "odor"])
 	)
 	xlims!(0, nothing)
-	barplot!(1:nrow(odors), odors[:, "# molecules"], direction=:x)
-	ylims!(0.0, nrow(odors)+0.5)
+	barplot!(1:nrow(molecules_per_odor), molecules_per_odor[:, "# molecules"], direction=:x)
+	ylims!(0.0, nrow(molecules_per_odor)+0.5)
 	fig
 end
 
-# ╔═╡ 2045e894-396b-44d3-8dd8-ff0b88c598c2
-md"
-### molecules with certain chemistry
-👃 how many of the odorants have a carbonyl group in their structure? this is expressed as the SMARTS pattern \"[CX3]=[OX1]\".
-
-!!! hint
-	see `has_substruct_match` [here](https://mojaie.github.io/MolecularGraph.jl_notebook/substructure_and_query.jl.html).
-"
-
-# ╔═╡ 86683b41-7b2a-471f-b817-bc0925c3770f
-function has_carbonyl(smiles::String)
-	mol = smilestomol(smiles)
-	has_substruct_match(
-			mol, smartstomol(raw"[CX3]=[OX1]"))
-end
-
-# ╔═╡ 493328f4-fcfd-49d4-84f7-6540ea6d2319
-has_carbonyl(data[2, "molecule"])
-
-# ╔═╡ 72101250-16ae-4c20-a7aa-e1479a41860f
-nrow(
-	filter(row -> has_carbonyl(row["molecule"]), data)
-)
-
-# ╔═╡ 58b6234b-a10e-46de-8031-ab65028d3c89
-md"
-### co-occurances of labels
-the paper notes
-> there is an extremely strong co-occurrence structure among odor descriptors that reflects a common-sense intuition of which odor descriptors are similar and dissimilar.
-
-👃 (a strong co-occurance) among all molecules with \"apple\" as an olfactory label, what fraction of these also have the label `\"fruity\"?
-"
-
-# ╔═╡ 8bd8627b-9884-4efd-acf9-e1e57a52c833
-n_apple = nrow(filter(row -> "apple" in row["odor"], data))
-
-# ╔═╡ 06eabbc3-94af-4b76-9369-9e5df468cbbc
-n_apple_and_fruity = nrow(filter(row -> ("apple" in row["odor"]) && ("fruity" in row["odor"]), data))
-
-# ╔═╡ 494521db-50e9-48ee-913e-1ac3c70d3172
-n_apple_and_fruity / n_apple
-
-# ╔═╡ 380f9d36-fb68-490a-9021-16c265056a3e
-md"👃 (a weak co-occurance) among all molecules with the label \"cabbage\", what fraction also have the label \"musk\"?"
-
-# ╔═╡ c63f9137-574d-4c70-91ce-99fdc304bf02
-n_cabbage = nrow(filter(row -> "cabbage" in row["odor"], data))
-
-# ╔═╡ 1b3230db-bdda-4c71-9b33-31c779d50a7b
-n_cabbage_and_musk = nrow(filter(row -> ("cabbage" in row["odor"]) && ("musk" in row["odor"]), data))
-
-# ╔═╡ 7242a8c3-362c-4df9-b518-1a2a40ca2f39
-n_cabbage_and_musk / n_cabbage
-
 # ╔═╡ Cell order:
 # ╠═99004b2e-36f7-11ed-28ae-f3f75c823964
-# ╠═eb94cba7-7bbe-4948-bcdb-99e24fb36386
-# ╟─d952b919-f534-432a-a5c9-44bb98063ab2
-# ╠═f1538e5a-c3ce-4c19-a588-ca89d7cb7d1f
-# ╟─f548409f-bb9b-4903-b66f-c76ac64e0e31
-# ╟─4c6c310e-130c-4334-86c0-74b271c5a353
+# ╟─e3e38b40-e41d-4afc-9054-a253287a82bb
+# ╟─6946a79a-8141-4028-b3e9-db109437a407
+# ╟─b0a910b0-2a75-4db5-8b8d-9bbb2b46dc64
+# ╟─adedc0fc-5651-47c1-a687-bc6952cdd894
+# ╟─7fc6a021-b62b-4293-88a6-d564468deebd
+# ╟─19b9aae7-02dc-4f73-81b6-e48f22421078
+# ╟─5c2147bb-7f80-421a-8e03-908d3f99e3e6
+# ╟─f5f1a79a-2422-4c37-9e7a-40e5bdbac693
+# ╟─90169515-5113-4563-b36c-b7e9c2aefc81
+# ╟─dc2863e3-2cb1-40c9-ac64-de422553c820
+# ╟─d86cea70-e801-4a1b-aacb-80ffb03781ba
+# ╟─80ba1d37-955a-4ae2-82ef-50455a70985c
+# ╠═0ee9fcde-d4af-4b86-9252-df991e60268b
+# ╟─9408afd6-e0e4-4f09-8f9e-b2ad40960f81
+# ╟─7cf09702-6e16-432e-9f63-73ca7ffba8c4
+# ╠═1d3a8bb4-1e6c-4961-b88e-ddd48d8ec020
+# ╟─328c17c1-bac3-4c61-80fd-233bf0f84cc0
+# ╟─c30f3299-767a-46f6-b9e1-ee4585e99ff7
+# ╟─22146540-9de7-4040-a6ac-cbf816f7b78e
 # ╠═dc7bd01b-17d7-4276-986e-e273d6072430
-# ╟─9583319c-abbf-4986-8a0e-c98aaba0bfdd
+# ╟─9e046a92-90f5-4b6a-8fe2-5b741e761f15
+# ╟─b0350dd9-0d90-4cc5-8b48-dfb8ce7dfda0
 # ╠═00f67da6-4d8f-46cf-bdf1-4baba2b33253
-# ╟─4c232ff2-5d7a-4c70-88ce-bf9937b01076
+# ╟─8277ab12-b194-42e1-9802-46feff993227
+# ╟─463188aa-615c-4426-b7de-50cd816716f7
+# ╠═f7d020c8-50be-4329-8551-907edf81d605
 # ╠═19613f27-7358-417e-b77d-15d734a88e42
-# ╟─fdc340bd-28f1-4278-88ef-1edbe4f5bb7f
-# ╠═5fc8cd54-139c-4511-9c42-e06a2b992a68
-# ╟─5957d5e7-a71e-4e10-a33c-959885a91f36
-# ╠═de7614bb-2037-46c2-9fa3-1d7590f672ce
-# ╟─397a08ef-5ff3-41a2-8d13-78d9c72ad706
-# ╠═6e6f641c-f6c6-4387-9271-ffc32b69f5d4
+# ╟─a71a4c95-b3e7-49c7-b729-236869118729
+# ╠═378f3ff8-e693-4852-886b-b192eed33f67
 # ╟─8f5e6978-9016-4bff-ae41-033f5be4219a
 # ╠═bc94bbbe-c2e4-46bf-804c-e51256b2373d
-# ╟─89422b3f-72f9-4de4-bb5e-76a975376b38
+# ╟─5ba1bb77-e905-4508-aa72-c8e5e168b616
+# ╟─ff0b9207-68f7-4218-85b5-5995de34ab61
+# ╟─7ee15b57-15f1-4b64-ac09-53e9d0dbb550
 # ╠═07ce7883-f61f-4113-99ba-2195b4e41dfa
-# ╟─08b97919-4b89-494f-80d4-ab3aec6da6c5
+# ╟─d0979277-3d2d-431e-af4c-d87a3ba7cb03
+# ╟─2b826866-62dc-4f53-bccc-658602f624a7
 # ╠═f7d72939-f78d-476a-978a-b48fe6a51cec
-# ╟─46eeac6d-77ac-4002-9fb0-43f4e9fb42d1
+# ╟─5d229608-2d37-430a-97e1-cd95f0e44058
+# ╟─3cee2486-1904-43a6-933a-303d933267a6
 # ╠═bd1bdb6a-51e8-43f3-85d5-cbf757686cc8
-# ╟─540533e3-7a14-4f01-a291-e4bb8b86fda9
-# ╠═90f9b206-6e16-440e-801c-8ac198ad970a
+# ╟─1542471a-0877-4a18-9f48-6f4d96b12e2a
+# ╟─25b4bda4-f2f6-436f-90ec-01c0594118b5
+# ╠═dfd599fa-7991-48cc-b7e0-a0bb0bf9fe11
 # ╠═600197f1-a9d5-478b-8fa0-6deac3d25b57
-# ╟─25fcc550-342c-46f5-b70d-74314c9680f6
-# ╠═0ef23c71-c420-4f0c-8f7b-5ee2da0d765a
-# ╟─5366f0cf-e533-4b91-a5aa-e6d116fca206
-# ╠═7f5d3228-e1a4-4972-b3b1-37650267859c
-# ╟─e0aa196d-bbd2-42ff-8ba1-95f3f9120db4
-# ╠═7844b67b-b329-4fdb-8b2e-dd386b8e00e6
-# ╟─a5d0d0de-b54e-4e11-8176-8c2cb45f15e5
-# ╠═0efb02f9-c787-4565-aa58-cd4cc8f5fbb6
-# ╟─e221d029-7526-4cb1-9df5-fd9624f74635
-# ╠═1c87d0fd-8eef-4284-8d9d-05e02472d26e
-# ╠═14a1bb54-35fe-4e77-acab-fca1f7671165
-# ╟─eff6c147-d2d0-4cb6-8ff7-67a9c7469a9e
-# ╠═1a0004f9-714a-4fda-beb8-b38647bc223a
+# ╟─2e9eb9ec-7d3c-4042-8d52-1dbc306c7330
+# ╠═0f90911c-d106-4e6a-8260-4022085ff5b7
+# ╠═4578e868-c562-4e55-b107-5f57f9278f67
+# ╠═74678b17-ea44-4f3d-bedc-ba13a7c3d8c7
+# ╠═a7e2b7c9-ebfb-45d0-95ac-9c41d7dc4fed
 # ╟─54bdbcdc-dff8-4771-b1d7-a89c0f4b164c
 # ╠═d962f970-e62c-4a05-8219-2c81a54bdaba
 # ╠═9ad586da-ccbc-46e8-8e93-7f59ffb3bfd3
-# ╟─614195ed-bd2f-444f-ac82-f2b8511117da
-# ╠═1704b383-163e-47e8-93ea-9e28170fbb6d
-# ╟─26a2edab-2bb5-4ca6-89ff-d2358ae9512c
-# ╠═b3c8b89e-0806-410e-b991-f288454811e6
-# ╟─f6768d02-f015-4a0b-bce0-5478e7d613f1
-# ╠═1e270a21-497e-48fb-bdc5-7d25634e7e98
-# ╠═20a0fee0-1436-409d-93c1-07c2cb15c31b
-# ╠═526c3b02-0aca-413d-b45b-f8ed477e494c
-# ╠═7ed96a3d-3509-4c1d-8b40-9abc67f42b9c
-# ╟─e02f4169-d3b5-4807-a561-ad8004ebdd7d
+# ╠═4eb6f6a7-a130-40d8-b69f-0f1d8517b72f
+# ╠═fa0df4f6-51f8-47cf-8433-09f427833505
+# ╟─cdac62a7-5ed3-493b-949d-4796b9ead3dd
+# ╟─e9f70bdb-a67e-4174-b5dd-cc7df6fd3964
+# ╟─59f4d262-c916-4f62-a1c1-11fda7360027
 # ╠═e03e0656-9198-4419-ac8b-97ef98f37c3f
-# ╟─d83bcd9b-895f-47b8-b99e-a6eaabd9a62c
-# ╠═58930559-7dd7-461b-8ca8-cdeab3cdb14f
-# ╟─788a8f26-b22a-4035-ab15-20c8d776fa71
-# ╠═5b968cbc-e084-4a4b-be7b-59947e760175
-# ╟─664a1da4-e753-4617-9dd6-09e7e1fea44d
-# ╠═5dbf1a4d-60f1-4d34-947b-cf6408b4c903
-# ╟─d44d24ed-5c20-4003-bbb3-75a5dec7b499
+# ╟─55a1ed69-003a-4702-8226-80cc050a0912
+# ╠═80c3eaa2-dfa2-4822-9dc6-002dd3fc23c9
+# ╟─ebd5497a-799b-4064-b8ac-0365147fb4f8
+# ╠═a5ac81f7-2000-40d9-8969-b599fb18ae0d
+# ╠═c14edce9-c764-4938-b4d3-cdbba49433d1
+# ╟─f732f409-283a-46f3-bcc1-9b8913f37fda
+# ╟─057fff1b-e302-4dcb-9817-199cc2d0bca7
+# ╠═691057f2-0cbf-482b-8b4c-58601d8f7bcf
+# ╠═ae23e1fd-e5b6-4829-8fb6-32aa258719e1
+# ╠═df1e2872-3661-419c-94cb-326899f94efd
+# ╟─0a729562-155c-4911-9c30-40f79c41ecab
+# ╟─18df3697-ce68-4697-a27b-1bb74952ec47
+# ╠═f709afff-cede-4af6-bcb9-1df480c3c7e0
+# ╠═22907771-f6d7-47b2-8aaf-ee9fbfc96f9c
+# ╠═775e1f89-12c7-4078-8097-3e906a8b1973
+# ╟─e2326792-be54-4a14-ab8d-04019010c372
+# ╟─fd4f1370-5043-4fda-897e-9a62291cbcba
+# ╠═4ff07081-dd7e-4646-9bcb-9f15b0c75d89
+# ╠═47a135c0-fe63-4a13-a567-f3cd428ab73e
+# ╠═6e06d55b-34c4-4937-ae89-e40555cc5bd6
+# ╟─64176145-8bb6-4403-890c-a7a981e710fb
+# ╟─e49adaa0-c250-4610-a2f1-baad018867df
+# ╠═1c2842db-d4ac-4e38-94cb-7c9638455c91
+# ╟─740e23a3-d701-417d-a3b9-659f6a072a0b
+# ╠═09996b05-3094-4b51-8b54-e0856f36786a
+# ╟─b919dd0d-9bc4-46eb-bea2-d6e37da5aaef
+# ╟─0628a48a-e56c-404f-bcb9-c4ee77cd4423
+# ╟─ddd438af-9bed-489e-97b6-0e2545e05fc1
+# ╠═5809737f-edac-46e3-a5a8-941c8520efe2
+# ╠═8050b56a-5fd5-4cd4-b69f-b20c717270ae
+# ╠═fa4b6f62-a849-4372-941d-1a140e467082
+# ╟─b94b053c-0834-4854-961e-b78b4e6dfc9d
+# ╟─7de3ca35-3678-4993-9699-658ba0a0493f
+# ╠═87bc0133-c5e0-46eb-8aa4-92348ace1389
+# ╠═bf5649b4-8943-4fc0-ba87-e4fc1b6575bf
+# ╟─bfd01e02-8b11-4f03-898d-4e4cbcf1ad88
+# ╟─8ea79a32-e0ab-449e-aaff-ac0adc98cb79
+# ╠═db0b3074-12fe-48f5-9488-2e77c5e9969a
+# ╟─1d1d3868-43f5-4531-97cf-79a089ab793b
+# ╠═ceecd769-357c-4bfe-aefa-c479ce6bab4e
+# ╠═06a5887c-73d5-41d4-a3a4-661ac6e362c9
+# ╠═07d2caca-67da-4cd6-a329-3d241993f3ac
+# ╠═5765952b-8b4e-4a4f-bb38-75a49a5f15ce
+# ╠═6318dcf4-4478-4398-bbfc-5c663c078de9
+# ╠═6c547994-0566-4480-b23d-fbdc437431b0
+# ╠═95513350-d56d-4d68-a97a-dc77b7bfd495
+# ╟─171258ed-f732-44c2-8d8d-4a386ac8f5f2
+# ╟─f149b713-6e4c-462b-8cc3-ebc2d433d1f8
+# ╟─2020a24e-8dbe-4f2a-9aa3-5999391e7d9d
+# ╠═1ee63411-94a2-4535-a6bf-1ce62e23a6db
+# ╠═600de752-8927-493f-b58e-605773bb6c4c
+# ╠═d0ef14c9-391c-4af8-b915-d86c8aefd002
+# ╠═47cb7741-01da-4bd4-8c05-c818e6c87f6b
+# ╟─514c4b55-f246-475d-b5bc-67349854e0b4
+# ╠═83d1567c-b101-4f59-a658-1ff20e8d8b0f
+# ╠═394a567a-8e4e-4c6e-8f22-69e31daca417
+# ╟─39a1c22a-4011-4b15-9604-fd8ebcfc3357
+# ╟─9deb1a41-1248-47da-aacb-c129863f8db7
+# ╠═20380a67-3b2d-4063-a491-5bfe68706ee8
+# ╟─3f8057f7-3391-4361-9ec5-7f739c66649c
+# ╠═5c7647f0-ed46-4d14-90d7-c95584d45cc4
+# ╟─73f7cec2-da0e-4f94-a67c-ea8716051ae4
+# ╠═9faf164e-60f7-4bc9-8a94-b04e70e55b8a
+# ╠═c43ae3db-a34c-4aab-815e-f6820b44e558
+# ╠═f1403f59-3a34-4be8-a5fc-1f04513b80db
+# ╟─29ea157b-a324-49a0-8412-03d03be9b6e7
+# ╟─2462e47a-4f17-4723-87f8-324a2a570706
+# ╠═1a0c8ab5-6181-48a0-8a91-02a9bd2c75a4
+# ╠═fe2a4aab-85ce-4c2b-b042-3bdf5bf8fba2
+# ╠═fda94ce1-4069-4320-804a-d1f83d9f1073
+# ╠═8584efe5-be9e-42ba-973d-4634bf6ec1bb
+# ╟─a3e335ba-ad0a-4c59-865a-905bd8d4aaa0
+# ╠═1a0fc9ee-6fab-405b-9619-5092e696a777
 # ╟─7c889e04-bbee-490b-8cf8-fcc88fca3712
-# ╠═76385438-6751-41b9-ae56-caaee4cca266
+# ╟─38810e1d-94d9-4a18-8346-919cc1dba734
+# ╟─9302a9af-ce89-4d2a-a46b-573e3b4257a9
 # ╠═961f8c2c-cf31-47cc-ba96-14ded08c7507
+# ╠═0f4342b4-1343-47bd-a555-c351c2fa7c03
+# ╟─667f1ff5-d22c-4b8c-b5a4-1148f6741202
 # ╟─905dc26a-fc2c-47a0-8569-a4b7a4541cfa
-# ╟─9208b96f-963f-4fca-9a2e-3803160f11b1
+# ╟─b520bcf8-1aee-4a17-8e34-4ce97206bd7c
+# ╟─28e4e0c5-858d-4d7c-b7d2-3771ab7affb1
 # ╠═a11f06bb-9fcc-431d-9967-f8d26aa44bf2
 # ╟─b562ad25-45e5-4fc9-8d74-27b9727e4766
 # ╠═0233d3e0-c934-48c2-be82-8e041227aec5
-# ╟─2a2910af-dcf2-4aa7-bfc3-32950d73cc9e
 # ╠═ec3b2463-4284-41bb-9c60-63ba8a7b6705
-# ╟─53f58ff1-1f99-4205-9346-bf2f8ad4e74d
-# ╠═b1a04dc4-b281-413d-8cc0-3f704d1e6e3b
-# ╟─82b4049e-5c34-43a4-85e4-fd95c1693989
-# ╠═9e69ba26-4f61-4b54-94d8-986ed3d5a704
-# ╠═c8c928e8-f16c-4c6c-a807-5d64183e6d4d
-# ╠═832897f7-88fb-4389-b051-51adfec3db01
-# ╠═64bfc9fb-5866-426d-93ce-90521bf93356
-# ╟─47478ef0-a512-47d4-a171-74e073cab810
+# ╟─104cf55d-538c-4b5c-a6eb-47c91f20aa6f
 # ╠═25a5c232-a0f6-4a1b-8f91-3cee5d97b3db
-# ╠═75e8312d-1614-4626-99d1-3e07fdec8bab
 # ╠═3d1f7cfa-ae9b-4ed1-9261-595fee65a974
-# ╠═fa50cac7-64f9-4439-9645-c6c0b4fa0b99
 # ╠═28ec1019-f51e-4dd9-a5ca-cfd0a095fcea
-# ╟─2045e894-396b-44d3-8dd8-ff0b88c598c2
-# ╠═86683b41-7b2a-471f-b817-bc0925c3770f
-# ╠═493328f4-fcfd-49d4-84f7-6540ea6d2319
-# ╠═72101250-16ae-4c20-a7aa-e1479a41860f
-# ╟─58b6234b-a10e-46de-8031-ab65028d3c89
-# ╠═8bd8627b-9884-4efd-acf9-e1e57a52c833
-# ╠═06eabbc3-94af-4b76-9369-9e5df468cbbc
-# ╠═494521db-50e9-48ee-913e-1ac3c70d3172
-# ╟─380f9d36-fb68-490a-9021-16c265056a3e
-# ╠═c63f9137-574d-4c70-91ce-99fdc304bf02
-# ╠═1b3230db-bdda-4c71-9b33-31c779d50a7b
-# ╠═7242a8c3-362c-4df9-b518-1a2a40ca2f39

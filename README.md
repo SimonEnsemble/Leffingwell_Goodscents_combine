@@ -6,5 +6,3 @@ It is also a [Pluto](https://plutojl.org/) notebook.
 `"process_scent_data.html"` shows the notebook output.
 
 `"pyrfume.csv"` contains the resultant data set (structures and labels).
-
-`"odor_key.json"` contains a dictionary that converts bidirectionally between column number and odor label.

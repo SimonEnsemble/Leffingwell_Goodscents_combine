@@ -789,7 +789,9 @@ begin
 			@assert data[id_mol, 1 + label_to_idx[o]] == 1
 		end
 	end
-	# make sure the column name is right
+
+	# make sure the column names are right
+
 	@test names(data)[2:end] == [idx_to_label[i] for i = 1:length(idx_to_label)]
 end
 
@@ -947,6 +949,7 @@ end
 # ╟─25b4bda4-f2f6-436f-90ec-01c0594118b5
 # ╠═dfd599fa-7991-48cc-b7e0-a0bb0bf9fe11
 # ╟─fefe8530-b90e-42a3-b701-bbd406b003d0
+# ╟─36db4077-0000-409d-92d2-f3ceb8e451a4
 # ╠═600197f1-a9d5-478b-8fa0-6deac3d25b57
 # ╟─2e9eb9ec-7d3c-4042-8d52-1dbc306c7330
 # ╠═0f90911c-d106-4e6a-8260-4022085ff5b7
@@ -967,6 +970,7 @@ end
 # ╟─ebd5497a-799b-4064-b8ac-0365147fb4f8
 # ╠═a5ac81f7-2000-40d9-8969-b599fb18ae0d
 # ╟─645661c4-2749-4ba6-b3c3-844debc9c1d8
+# ╟─ffa33dd7-4e68-4196-9840-36919cb1adf1
 # ╠═c14edce9-c764-4938-b4d3-cdbba49433d1
 # ╟─f732f409-283a-46f3-bcc1-9b8913f37fda
 # ╟─057fff1b-e302-4dcb-9817-199cc2d0bca7
@@ -984,6 +988,7 @@ end
 # ╠═47a135c0-fe63-4a13-a567-f3cd428ab73e
 # ╠═6e06d55b-34c4-4937-ae89-e40555cc5bd6
 # ╟─64176145-8bb6-4403-890c-a7a981e710fb
+# ╟─e49adaa0-c250-4610-a2f1-baad018867df
 # ╠═1c2842db-d4ac-4e38-94cb-7c9638455c91
 # ╟─740e23a3-d701-417d-a3b9-659f6a072a0b
 # ╠═09996b05-3094-4b51-8b54-e0856f36786a

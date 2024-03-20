@@ -109,7 +109,7 @@ md"""
 
 # ╔═╡ 80ba1d37-955a-4ae2-82ef-50455a70985c
 md"""
-We use the data from the following commit, which was the most recent as of mid-February 2024.  `pyrfume` has an API for downloading the most recent commit, but not for a specific commit, so we enforce data stability this way.
+We use the `pyrfume` data from the following commit, which was the most recent as of mid-February 2024.  `pyrfume` has an API for downloading the most recent commit, but not for a specific commit, so we enforce data stability this way.
 """
 
 # ╔═╡ 0ee9fcde-d4af-4b86-9252-df991e60268b
@@ -127,14 +127,13 @@ Each raw data file will be downloaded from GitHub and loaded into a `DataFrame`.
 
 # ╔═╡ 1d3a8bb4-1e6c-4961-b88e-ddd48d8ec020
 """
-download a specific commit of a file from the pyrfume GitHub data repository and return the CSV data as a `DataFrame`
+download a specific commit of a file from the pyrfume GitHub data repository and return the CSV data as a `DataFrame`.
 """
 function get_raw_data(file; commit=pyrfume_commit)
 	@assert endswith(file, ".csv")
 	url = "https://raw.githubusercontent.com/pyrfume/pyrfume-data/$commit/$file"
 	filepath = download(url)
-	df = CSV.read(filepath, DataFrame)
-	return df
+	return CSV.read(filepath, DataFrame)
 end
 
 # ╔═╡ 328c17c1-bac3-4c61-80fd-233bf0f84cc0
@@ -185,8 +184,10 @@ function transform_leffingwell(col)
 	# remove invalid characters
 	replacement_pairs = ["$x" => "" for x in "[,]"]
 	col = [replace(row, replacement_pairs...) for row in col]
+	
 	# split on single quotes
 	col = split.(col, '\''; keepempty=false)
+	
 	# remove the single-space strings that are left behind
 	return [filter(≠(" "), s) for s in col]
 end
@@ -195,7 +196,7 @@ end
 leffingwell = let
 	df = outerjoin(leffingwell_behaviors, leffingwell_stimuli, on="Stimulus")
 	select!(df, ["IsomericSMILES", "Labels"])
-	rename!(df, "Labels" => "leffingwell_odor", "IsomericSMILES"=>"molecule")
+	rename!(df, "Labels" => "leffingwell_odor", "IsomericSMILES" => "molecule")
 	transform!(df, "leffingwell_odor" => transform_leffingwell; renamecols=false)
 end
 
@@ -275,19 +276,25 @@ begin
 	_goodscents = outerjoin(goodscents_behaviors, goodscents_stimuli; on="Stimulus")
 	# join with molecules on CID
 	_goodscents = innerjoin(_goodscents, goodscents_molecules; on="CID")
+	
 	# rename and select columns
 	rename!(_goodscents, "IsomericSMILES" => "molecule")
 	rename!(_goodscents, "Descriptors" => "goodscents_odor")
 	select!(_goodscents, ["molecule", "goodscents_odor"])
+	
 	# drop rows with missing data
 	dropmissing!(_goodscents)
-	# # extract the labels from the raw strings
+	
+	# extract the labels from the raw strings
 	transform!(
 		_goodscents, 
 		"goodscents_odor" => col -> [String.(x) for x in split.(col, ";")]; 
 		renamecols=false
 	)
 end
+
+# ╔═╡ fefe8530-b90e-42a3-b701-bbd406b003d0
+md"below shows a molecule is repeated!"
 
 # ╔═╡ 600197f1-a9d5-478b-8fa0-6deac3d25b57
 goodscents_gdf = groupby(_goodscents, :molecule)
@@ -311,7 +318,7 @@ goodscents_gdf[ids_duplicates[1]]
 
 # ╔═╡ 54bdbcdc-dff8-4771-b1d7-a89c0f4b164c
 md"""
-Merge rows by concatenating odor lists
+Merge rows by concatenating odor lists e.g.
 
 | molecule | goodscents_odor |
 | --- | ----------- |
@@ -329,7 +336,7 @@ Merge rows by concatenating odor lists
 """
 combine a column from a `GroupedDataFrame` into a single odor list per group
 """
-function combine_goodscents(gcol)
+function combine_same_molecules(gcol)
 	# gcol is the odor column from a single group
 	if length(gcol) == 1
 		# the group is already formatted properly
@@ -344,7 +351,7 @@ end
 # ╔═╡ 9ad586da-ccbc-46e8-8e93-7f59ffb3bfd3
 goodscents = combine(
 	goodscents_gdf, 
-	"goodscents_odor" => combine_goodscents; 
+	"goodscents_odor" => combine_same_molecules; 
 	renamecols=false
 )
 
@@ -379,7 +386,7 @@ merged = let
 			((col1, col2) -> col1 .∪ col2) => 
 			"odor"
 	)
-	select!(df, [:molecule, :odor])
+	select!(df, ["molecule", "odor"])
 end
 
 # ╔═╡ 55a1ed69-003a-4702-8226-80cc050a0912
@@ -414,6 +421,9 @@ we'll store them here then replace at the end.
 
 # ╔═╡ a5ac81f7-2000-40d9-8969-b599fb18ae0d
 odor_label_replacements = Dict{String, String}()
+
+# ╔═╡ 645661c4-2749-4ba6-b3c3-844debc9c1d8
+md"preliminary list of odors"
 
 # ╔═╡ c14edce9-c764-4938-b4d3-cdbba49433d1
 prelim_odors = String.(reduce(union, merged.odor))
@@ -514,11 +524,6 @@ md"""
 # ╔═╡ 1c2842db-d4ac-4e38-94cb-7c9638455c91
 currant_forms = filter(o -> occursin("currant", o), prelim_odors)
 
-# ╔═╡ e49adaa0-c250-4610-a2f1-baad018867df
-"""
-The odor of blackcurrant is encoded $(length(currant_forms)) different ways:
-""" |> Markdown.parse
-
 # ╔═╡ 740e23a3-d701-417d-a3b9-659f6a072a0b
 md"""
 We correct instances of the two alternate forms to `"currant"`.
@@ -602,9 +607,8 @@ corrected = let
 		@info "round $i"
 		df2 = transform(
 			df,
-			:odor => col -> [
-				replace(row, odor_label_replacements...) for row in col
-			] .|> unique;
+			:odor => col -> 
+			[replace(row, odor_label_replacements...) for row in col] .|> unique;
 			renamecols=false
 		)
 		df_odors = reduce(union, df.odor)
@@ -648,7 +652,8 @@ md"""
 # ╔═╡ 2020a24e-8dbe-4f2a-9aa3-5999391e7d9d
 md"""
 The remaining multi-word labels are sufficiently rare to excuse their exclusion.
-In fact, all labels with fewer than 30 positive instances are excluded.
+
+further, we exclude all labels with fewer than 30 positive instances are excluded.
 """
 
 # ╔═╡ 1ee63411-94a2-4535-a6bf-1ce62e23a6db
@@ -701,7 +706,7 @@ Every molecule now has at least $(length.(trimmed.odor) |> minimum) label...
 """ |> Markdown.parse
 
 # ╔═╡ 20380a67-3b2d-4063-a491-5bfe68706ee8
-@test length.(trimmed.odor) |> minimum == 1
+@test minimum(length.(trimmed.odor)) == 1
 
 # ╔═╡ 3f8057f7-3391-4361-9ec5-7f739c66649c
 md"""
@@ -741,7 +746,7 @@ We need these data in bit-encoded format.
 
 # ╔═╡ 1a0c8ab5-6181-48a0-8a91-02a9bd2c75a4
 label_to_idx = let
-	label_vec = reduce(union, trimmed.odor) 
+	label_vec = reduce(union, trimmed.odor)
 	Dict(label_vec .=> eachindex(label_vec))
 end
 
@@ -754,6 +759,7 @@ function odor_list_to_vector_encoding(odor_list)
 	for odor in odor_list
 		vector[label_to_idx[odor]] = 1
 	end
+	@assert sum(vector) == length(odor_list)
 	return vector
 end
 
@@ -770,15 +776,21 @@ data = let
 end
 
 # ╔═╡ a3e335ba-ad0a-4c59-865a-905bd8d4aaa0
-md"some checks"
+md"checks bit vector encoding"
 
 # ╔═╡ 1a0fc9ee-6fab-405b-9619-5092e696a777
 begin
-	id_mol_rand = rand(1:nrow(data))
-	@assert sum(data[id_mol_rand, 2:end]) == length(trimmed[id_mol_rand, "odor"])
-	for o in trimmed[id_mol_rand, "odor"]
-		@assert data[id_mol_rand, 1 + label_to_idx[o]] == 1
+	for id_mol = 1:nrow(data)
+		# sum of active bits = # odors
+		@assert sum(data[id_mol, 2:end]) == length(unique(trimmed[id_mol, "odor"]))
+
+		# make sure the right odor is activated
+		for o in trimmed[id_mol, "odor"]
+			@assert data[id_mol, 1 + label_to_idx[o]] == 1
+		end
 	end
+	# make sure the column name is right
+	@test names(data)[2:end] == [idx_to_label[i] for i = 1:length(idx_to_label)]
 end
 
 # ╔═╡ 7c889e04-bbee-490b-8cf8-fcc88fca3712
@@ -934,6 +946,7 @@ end
 # ╟─1542471a-0877-4a18-9f48-6f4d96b12e2a
 # ╟─25b4bda4-f2f6-436f-90ec-01c0594118b5
 # ╠═dfd599fa-7991-48cc-b7e0-a0bb0bf9fe11
+# ╟─fefe8530-b90e-42a3-b701-bbd406b003d0
 # ╠═600197f1-a9d5-478b-8fa0-6deac3d25b57
 # ╟─2e9eb9ec-7d3c-4042-8d52-1dbc306c7330
 # ╠═0f90911c-d106-4e6a-8260-4022085ff5b7
@@ -953,6 +966,7 @@ end
 # ╠═80c3eaa2-dfa2-4822-9dc6-002dd3fc23c9
 # ╟─ebd5497a-799b-4064-b8ac-0365147fb4f8
 # ╠═a5ac81f7-2000-40d9-8969-b599fb18ae0d
+# ╟─645661c4-2749-4ba6-b3c3-844debc9c1d8
 # ╠═c14edce9-c764-4938-b4d3-cdbba49433d1
 # ╟─f732f409-283a-46f3-bcc1-9b8913f37fda
 # ╟─057fff1b-e302-4dcb-9817-199cc2d0bca7
@@ -970,7 +984,6 @@ end
 # ╠═47a135c0-fe63-4a13-a567-f3cd428ab73e
 # ╠═6e06d55b-34c4-4937-ae89-e40555cc5bd6
 # ╟─64176145-8bb6-4403-890c-a7a981e710fb
-# ╟─e49adaa0-c250-4610-a2f1-baad018867df
 # ╠═1c2842db-d4ac-4e38-94cb-7c9638455c91
 # ╟─740e23a3-d701-417d-a3b9-659f6a072a0b
 # ╠═09996b05-3094-4b51-8b54-e0856f36786a

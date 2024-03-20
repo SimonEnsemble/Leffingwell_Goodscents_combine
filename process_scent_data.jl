@@ -109,7 +109,7 @@ md"""
 
 # ╔═╡ 80ba1d37-955a-4ae2-82ef-50455a70985c
 md"""
-We use the data from the following commit, which was the most recent as of mid-February 2024.  `pyrfume` has an API for downloading the most recent commit, but not for a specific commit, so we enforce data stability this way.
+We use the `pyrfume` data from the following commit, which was the most recent as of mid-February 2024.  `pyrfume` has an API for downloading the most recent commit, but not for a specific commit, so we enforce data stability this way.
 """
 
 # ╔═╡ 0ee9fcde-d4af-4b86-9252-df991e60268b
@@ -133,8 +133,7 @@ function get_raw_data(file; commit=pyrfume_commit)
 	@assert endswith(file, ".csv")
 	url = "https://raw.githubusercontent.com/pyrfume/pyrfume-data/$commit/$file"
 	filepath = download(url)
-	df = CSV.read(filepath, DataFrame)
-	return df
+	return CSV.read(filepath, DataFrame)
 end
 
 # ╔═╡ 328c17c1-bac3-4c61-80fd-233bf0f84cc0
@@ -185,8 +184,10 @@ function transform_leffingwell(col)
 	# remove invalid characters
 	replacement_pairs = ["$x" => "" for x in "[,]"]
 	col = [replace(row, replacement_pairs...) for row in col]
+	
 	# split on single quotes
 	col = split.(col, '\''; keepempty=false)
+	
 	# remove the single-space strings that are left behind
 	return [filter(≠(" "), s) for s in col]
 end
@@ -195,7 +196,7 @@ end
 leffingwell = let
 	df = outerjoin(leffingwell_behaviors, leffingwell_stimuli, on="Stimulus")
 	select!(df, ["IsomericSMILES", "Labels"])
-	rename!(df, "Labels" => "leffingwell_odor", "IsomericSMILES"=>"molecule")
+	rename!(df, "Labels" => "leffingwell_odor", "IsomericSMILES" => "molecule")
 	transform!(df, "leffingwell_odor" => transform_leffingwell; renamecols=false)
 end
 
@@ -289,6 +290,9 @@ begin
 	)
 end
 
+# ╔═╡ 36db4077-0000-409d-92d2-f3ceb8e451a4
+md"group by molecule to find molecules with repeated rows."
+
 # ╔═╡ 600197f1-a9d5-478b-8fa0-6deac3d25b57
 goodscents_gdf = groupby(_goodscents, :molecule)
 
@@ -329,7 +333,7 @@ Merge rows by concatenating odor lists
 """
 combine a column from a `GroupedDataFrame` into a single odor list per group
 """
-function combine_goodscents(gcol)
+function combine_same_molecules(gcol)
 	# gcol is the odor column from a single group
 	if length(gcol) == 1
 		# the group is already formatted properly
@@ -344,7 +348,7 @@ end
 # ╔═╡ 9ad586da-ccbc-46e8-8e93-7f59ffb3bfd3
 goodscents = combine(
 	goodscents_gdf, 
-	"goodscents_odor" => combine_goodscents; 
+	"goodscents_odor" => combine_same_molecules; 
 	renamecols=false
 )
 
@@ -379,7 +383,7 @@ merged = let
 			((col1, col2) -> col1 .∪ col2) => 
 			"odor"
 	)
-	select!(df, [:molecule, :odor])
+	select!(df, ["molecule", "odor"])
 end
 
 # ╔═╡ 55a1ed69-003a-4702-8226-80cc050a0912
@@ -414,6 +418,9 @@ we'll store them here then replace at the end.
 
 # ╔═╡ a5ac81f7-2000-40d9-8969-b599fb18ae0d
 odor_label_replacements = Dict{String, String}()
+
+# ╔═╡ ffa33dd7-4e68-4196-9840-36919cb1adf1
+md"preliminary list of odors"
 
 # ╔═╡ c14edce9-c764-4938-b4d3-cdbba49433d1
 prelim_odors = String.(reduce(union, merged.odor))
@@ -648,7 +655,8 @@ md"""
 # ╔═╡ 2020a24e-8dbe-4f2a-9aa3-5999391e7d9d
 md"""
 The remaining multi-word labels are sufficiently rare to excuse their exclusion.
-In fact, all labels with fewer than 30 positive instances are excluded.
+
+futher, **we exclude all labels with fewer than 30 positive instances**.
 """
 
 # ╔═╡ 1ee63411-94a2-4535-a6bf-1ce62e23a6db
@@ -774,11 +782,17 @@ md"some checks"
 
 # ╔═╡ 1a0fc9ee-6fab-405b-9619-5092e696a777
 begin
-	id_mol_rand = rand(1:nrow(data))
-	@assert sum(data[id_mol_rand, 2:end]) == length(trimmed[id_mol_rand, "odor"])
-	for o in trimmed[id_mol_rand, "odor"]
-		@assert data[id_mol_rand, 1 + label_to_idx[o]] == 1
+	for id_mol = 1:nrow(data)
+		# sum of active bits = # odors
+		@assert sum(data[id_mol, 2:end]) == length(unique(trimmed[id_mol, "odor"]))
+
+		# make sure the right odor is activated
+		for o in trimmed[id_mol, "odor"]
+			@assert data[id_mol, 1 + label_to_idx[o]] == 1
+		end
 	end
+	# make sure the column names are right
+	@test names(data)[2:end] == [idx_to_label[i] for i = 1:length(idx_to_label)]
 end
 
 # ╔═╡ 7c889e04-bbee-490b-8cf8-fcc88fca3712
@@ -934,6 +948,7 @@ end
 # ╟─1542471a-0877-4a18-9f48-6f4d96b12e2a
 # ╟─25b4bda4-f2f6-436f-90ec-01c0594118b5
 # ╠═dfd599fa-7991-48cc-b7e0-a0bb0bf9fe11
+# ╟─36db4077-0000-409d-92d2-f3ceb8e451a4
 # ╠═600197f1-a9d5-478b-8fa0-6deac3d25b57
 # ╟─2e9eb9ec-7d3c-4042-8d52-1dbc306c7330
 # ╠═0f90911c-d106-4e6a-8260-4022085ff5b7
@@ -953,6 +968,7 @@ end
 # ╠═80c3eaa2-dfa2-4822-9dc6-002dd3fc23c9
 # ╟─ebd5497a-799b-4064-b8ac-0365147fb4f8
 # ╠═a5ac81f7-2000-40d9-8969-b599fb18ae0d
+# ╟─ffa33dd7-4e68-4196-9840-36919cb1adf1
 # ╠═c14edce9-c764-4938-b4d3-cdbba49433d1
 # ╟─f732f409-283a-46f3-bcc1-9b8913f37fda
 # ╟─057fff1b-e302-4dcb-9817-199cc2d0bca7

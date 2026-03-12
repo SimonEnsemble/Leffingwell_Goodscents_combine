@@ -1,15 +1,15 @@
 ### A Pluto.jl notebook ###
-# v0.19.40
+# v0.20.23
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ 99004b2e-36f7-11ed-28ae-f3f75c823964
 begin
-	import Pkg
-	Pkg.activate("."; io=devnull)
-	Pkg.instantiate(; io=devnull)
-	using CSV, DataFrames, JSON
+	import Pkg; Pkg.activate()
+	# Pkg.activate("."; io=devnull)
+	# Pkg.instantiate(; io=devnull)
+	using CSV, DataFrames
 	using CairoMakie, Colors, PlutoTest, PlutoUI
 	TableOfContents(; title="Odor Data Processing", depth=3)
 end
@@ -113,7 +113,7 @@ We use the `pyrfume` data from the following commit, which was the most recent a
 """
 
 # ╔═╡ 0ee9fcde-d4af-4b86-9252-df991e60268b
-pyrfume_commit = "0e9652c4fde822ad4009d175feb4cfeb7e80d3f7";
+pyrfume_commit = "8054ea98ed675005ec10e67359902f500e4911b0"; # Sep 25, 2025
 
 # ╔═╡ 9408afd6-e0e4-4f09-8f9e-b2ad40960f81
 md"""
@@ -206,7 +206,7 @@ Check that all molecules have at least one odor label.
 """
 
 # ╔═╡ 378f3ff8-e693-4852-886b-b192eed33f67
-@assert all(length.(leffingwell.leffingwell_odor) .> 0)
+@test all(length.(leffingwell.leffingwell_odor) .> 0)
 
 # ╔═╡ 8f5e6978-9016-4bff-ae41-033f5be4219a
 md"""
@@ -214,7 +214,7 @@ Check for SMILES uniqueness.
 """
 
 # ╔═╡ bc94bbbe-c2e4-46bf-804c-e51256b2373d
-@assert length(unique(leffingwell[:, "molecule"])) == nrow(leffingwell)
+@test length(unique(leffingwell[:, "molecule"])) == nrow(leffingwell)
 
 # ╔═╡ 5ba1bb77-e905-4508-aa72-c8e5e168b616
 md"""
@@ -394,23 +394,34 @@ md"to check, find some molecule in common between the two data sets and make sur
 
 # ╔═╡ 80c3eaa2-dfa2-4822-9dc6-002dd3fc23c9
 begin
-	common_molecule = pop!(intersect(
-		Set(goodscents[:, "molecule"]),
-		Set(leffingwell[:, "molecule"]),
-	))
-	
-	all_odors = vcat(
-		filter(
-			row -> row["molecule"] == common_molecule, goodscents
-		)[1, "goodscents_odor"],
-		filter(
-			row -> row["molecule"] == common_molecule, leffingwell
-		)[1, "leffingwell_odor"]
+	common_molecule = pop!(
+		intersect(
+			Set(goodscents[:, "molecule"]), Set(leffingwell[:, "molecule"]),
+		)
 	)
+
+	println("common molecule: ", common_molecule)
+
+	local gs_odors = filter(
+			row -> row["molecule"] == common_molecule, goodscents
+	)[1, "goodscents_odor"]
+
+	local lf_odors = filter(
+		row -> row["molecule"] == common_molecule, leffingwell
+	)[1, "leffingwell_odor"]
+
+	println("\tGoodscents odors: ", gs_odors)
+	println("\tLeffingwell odors: ", lf_odors)
 	
-	@test filter(
+	local all_odors_should_be = vcat(gs_odors, lf_odors)
+
+	local all_odors = filter(
 		row -> row["molecule"] == common_molecule, merged
-	)[1, "odor"] == all_odors
+	)[1, "odor"]
+
+	println("\todors combined df: ", all_odors)
+	
+	@test all_odors_should_be == all_odors
 end
 
 # ╔═╡ ebd5497a-799b-4064-b8ac-0365147fb4f8
@@ -852,8 +863,9 @@ odor_label_counts = combine(
 
 # ╔═╡ ec3b2463-4284-41bb-9c60-63ba8a7b6705
 begin
-	fig2 = Figure(; size=(660, 400))
-	ax2  = Axis(fig2[1, 1],
+	fig2 = Figure(size=(660, 400))
+	ax2  = Axis(
+		fig2[1, 1],
 		xlabel="# odor labels on a molecule",
 		ylabel="# molecules",
 		xticks=1:25
@@ -949,7 +961,6 @@ end
 # ╟─25b4bda4-f2f6-436f-90ec-01c0594118b5
 # ╠═dfd599fa-7991-48cc-b7e0-a0bb0bf9fe11
 # ╟─fefe8530-b90e-42a3-b701-bbd406b003d0
-# ╟─36db4077-0000-409d-92d2-f3ceb8e451a4
 # ╠═600197f1-a9d5-478b-8fa0-6deac3d25b57
 # ╟─2e9eb9ec-7d3c-4042-8d52-1dbc306c7330
 # ╠═0f90911c-d106-4e6a-8260-4022085ff5b7
@@ -970,7 +981,6 @@ end
 # ╟─ebd5497a-799b-4064-b8ac-0365147fb4f8
 # ╠═a5ac81f7-2000-40d9-8969-b599fb18ae0d
 # ╟─645661c4-2749-4ba6-b3c3-844debc9c1d8
-# ╟─ffa33dd7-4e68-4196-9840-36919cb1adf1
 # ╠═c14edce9-c764-4938-b4d3-cdbba49433d1
 # ╟─f732f409-283a-46f3-bcc1-9b8913f37fda
 # ╟─057fff1b-e302-4dcb-9817-199cc2d0bca7
@@ -988,7 +998,6 @@ end
 # ╠═47a135c0-fe63-4a13-a567-f3cd428ab73e
 # ╠═6e06d55b-34c4-4937-ae89-e40555cc5bd6
 # ╟─64176145-8bb6-4403-890c-a7a981e710fb
-# ╟─e49adaa0-c250-4610-a2f1-baad018867df
 # ╠═1c2842db-d4ac-4e38-94cb-7c9638455c91
 # ╟─740e23a3-d701-417d-a3b9-659f6a072a0b
 # ╠═09996b05-3094-4b51-8b54-e0856f36786a
